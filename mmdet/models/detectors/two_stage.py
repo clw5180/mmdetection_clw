@@ -184,14 +184,14 @@ class TwoStageDetector(BaseDetector):
         return await self.roi_head.async_simple_test(
             x, proposal_list, img_meta, rescale=rescale)
 
-    def simple_test(self, img, img_metas, proposals=None, rescale=False):
+    def simple_test(self, img, img_metas, proposals=None, rescale=False):  # clw note: test.py 进这里
         """Test without augmentation."""
         assert self.with_bbox, 'Bbox head must be implemented.'
 
-        x = self.extract_feat(img)
+        x = self.extract_feat(img)  # 5 tensor: (1, 256, h/8, w/8), (1, 256, h/16, w/16)... (1, 256, h/128, w/128)
 
         if proposals is None:
-            proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)
+            proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)  # clw note: (1000, 5)
         else:
             proposal_list = proposals
 

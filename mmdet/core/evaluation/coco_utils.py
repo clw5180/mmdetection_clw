@@ -151,12 +151,14 @@ def det2json(dataset, results):
         result = results[idx]
         for label in range(len(result)):
             bboxes = result[label]
+            # if len(bboxes) == 0:
+            #     continue
             for i in range(bboxes.shape[0]):
                 data = dict()
                 #data['image_id'] = img_id
                 data['name'] = img_name
                 #data['bbox'] = xyxy2xywh(bboxes[i])
-                data['bbox'] = bboxes[i]
+                data['bbox'] = bboxes[i][:4]
                 data['score'] = float(bboxes[i][4])
                 #data['category_id'] = dataset.cat_ids[label]
                 data['category'] = dataset.cat_ids[label]
@@ -201,7 +203,7 @@ def segm2json(dataset, results):
                 segm_json_results.append(data)
     return bbox_json_results, segm_json_results
 
-
+# import json
 def results2json(dataset, results, out_file):
     result_files = dict()
     if isinstance(results[0], list):
@@ -209,6 +211,8 @@ def results2json(dataset, results, out_file):
         result_files['bbox'] = '{}.{}.json'.format(out_file, 'bbox')
         result_files['proposal'] = '{}.{}.json'.format(out_file, 'bbox')
         mmcv.dump(json_results, result_files['bbox'])
+        # with open(result_files['bbox'], 'w') as fp:  # clw modify:  json_result is not is not JSON serializable
+        #     json.dump(json_results, fp, indent=4, ensure_ascii=False)
     elif isinstance(results[0], tuple):
         json_results = segm2json(dataset, results)
         result_files['bbox'] = '{}.{}.json'.format(out_file, 'bbox')

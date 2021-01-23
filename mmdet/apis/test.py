@@ -12,6 +12,11 @@ from mmcv.runner import get_dist_info
 
 from mmdet.core import encode_mask_results
 
+###############################################
+from mmdet.apis import inference_detector, init_detector  # clw add
+import numpy as np
+import torchvision
+###########################################
 
 def single_gpu_test(model,
                     data_loader,
@@ -25,6 +30,131 @@ def single_gpu_test(model,
     for i, data in enumerate(data_loader):
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
+
+            ########### clw note: for debug
+            # for idx, item in enumerate(result[0]):
+            #     for row in item:
+            #         print('boxw:', row[2] - row[0],  'boxh:', row[3] - row[1] )
+            #         if row[2] - row[0] == 0 or row[3] - row[1] == 0:
+            #             print('aaaa')
+            #########
+
+        batch_size = len(result)
+        if show or out_dir:
+            if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
+                img_tensor = data['img'][0]
+            else:
+                img_tensor = data['img'][0].data[0]
+            img_metas = data['img_metas'][0].data[0]
+            imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
+            assert len(imgs) == len(img_metas)
+
+            for i, (img, img_meta) in enumerate(zip(imgs, img_metas)):
+                h, w, _ = img_meta['img_shape']
+                img_show = img[:h, :w, :]
+
+                ori_h, ori_w = img_meta['ori_shape'][:-1]
+                img_show = mmcv.imresize(img_show, (ori_w, ori_h))
+
+                if out_dir:
+                    out_file = osp.join(out_dir, img_meta['ori_filename'])
+                else:
+                    out_file = None
+
+                model.module.show_result(
+                    img_show,
+                    result[i],
+                    show=show,
+                    out_file=out_file,
+                    score_thr=show_score_thr)
+
+        # encode mask results
+        if isinstance(result[0], tuple):
+            result = [(bbox_results, encode_mask_results(mask_results))
+                      for bbox_results, mask_results in result]
+        results.extend(result)
+
+        for _ in range(batch_size):
+            prog_bar.update()
+    return results
+
+# clw add
+def single_gpu_test_crop_img(model,
+                    data_loader,
+                    show=False,
+                    out_dir=None,
+                    show_score_thr=0.3):
+    model.eval()
+    results = []
+    dataset = data_loader.dataset
+    prog_bar = mmcv.ProgressBar(len(dataset))
+
+    for i, data in enumerate(data_loader):  # data['img][0]: tensor (1, 3, 6016, 8192)
+        img_h = data['img'][0].shape[2]
+        img_w = data['img'][0].shape[3]
+        with torch.no_grad():
+            # 如果是 4096x3500,直接原图预测
+            if img_h <= 3500 and img_w <= 4096:
+            #if img_h <= 10000 and img_w <= 10000:
+                result = model(return_loss=False, rescale=True, **data)
+            else:
+                # 否则切图, 4 nums
+                ##############################
+                overlap_h = 272
+                overlap_w = 256
+
+                crop_h = round((img_h + overlap_h) / 2)   # clw note: the size can be divided by 32 is better
+                crop_w = round((img_w + overlap_w) / 2)
+                #crop_h = 800
+                #crop_w = 1344
+                # crop_w = 1333
+
+                #step_h = int(0.8 * crop_h)
+                #step_w = int(0.8 * crop_w)
+                step_h = crop_h - overlap_h
+                step_w = crop_w - overlap_w
+
+                nms_iou_thr = model.module.test_cfg['rcnn']['nms']['iou_threshold']
+                results_crop = [[] for _ in range(len(model.module.CLASSES))]
+                data['img_metas'][0].data[0][0]['ori_shape'] = (crop_h, crop_w)
+                data['img_metas'][0].data[0][0]['img_shape'] = (crop_h, crop_w)
+                data['img_metas'][0].data[0][0]['pad_shape'] = (crop_h, crop_w)
+                img_tensor_orig = data['img'][0].clone()
+                for start_h in range(0, img_h-crop_h+1, step_h):  # imgsz is crop step here,
+                    if start_h + crop_h > img_h:  # 如果最后剩下的不到imgsz,则step少一些,保证切的图尺寸不变
+                        start_h = img_h - crop_h
+
+                    for start_w in range(0, img_w-crop_w+1, step_w):
+                        if start_w + crop_w > img_w:  # 如果最后剩下的不到imgsz,则step少一些,保证切的图尺寸不变
+                            start_w = img_w - crop_w
+                        # crop
+                        print(start_h, start_w)
+                        data['img'][0] = img_tensor_orig[:, :, start_h:start_h + crop_h, start_w:start_w + crop_w]
+
+                        result = model(return_loss=False, rescale=True, **data)  # result[0]: model.module.CLASSES 个list,每个里面装着(n, 5) ndarray
+                        #result = model(return_loss=False, rescale=False, **data)  # clw modify
+                        for idx, item in enumerate(result[0]):
+                            for row in item:
+                                #print('boxw:', row[2] - row[0],  'boxh:', row[3] - row[1] )
+                                if row[2] - row[0] == 0 or row[3] - row[1] == 0:
+                                    print('===================================================================')
+                                    continue
+                                row[[0, 2]] += start_w
+                                row[[1, 3]] += start_h
+                                results_crop[idx].append(row)
+
+                results_afternms = []
+                for idx, res in enumerate(results_crop):
+                    if len(res) == 0:
+                        results_afternms.append(np.array([])) # clw note: it's really important!!
+                        continue
+                    else:
+                        prediction = torch.tensor(res)
+                        boxes, scores = prediction[:, :4], prediction[:, 4]  # boxes (offset by class), scores
+                        i = torchvision.ops.boxes.nms(boxes, scores, nms_iou_thr)
+                        results_afternms.append(prediction[i].numpy())
+                result = [ results_afternms ]
+                ##############################
 
         batch_size = len(result)
         if show or out_dir:
