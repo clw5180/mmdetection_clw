@@ -6,8 +6,10 @@ from PIL import Image
 
 CLASSES = ("边异常", "角异常", "白色点瑕疵", "浅色块瑕疵", "深色点块瑕疵", "光圈瑕疵")  # clw modify
 label_ids = {name: i + 1 for i, name in enumerate(CLASSES)}
-base_path = '/home/user/dataset/tile_round1_testA_20201231'
-test_images_dir = os.path.join(base_path, 'testA_imgs-')
+#base_path = '/home/user/dataset/tile_round1_testA_20201231'
+#test_images_dir = os.path.join(base_path, 'testA_imgs-')
+base_path = '/home/user/dataset/2021tianchi'
+test_images_dir = os.path.join(base_path, 'extract_rotate_rect---test')
 json_save_path = os.path.join(base_path, 'testA.json')
 
 def save(images, annotations):

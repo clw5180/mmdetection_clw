@@ -196,6 +196,107 @@ def single_gpu_test_crop_img(model,
     return results
 
 
+# clw added
+import cv2
+def single_gpu_test_processed_img(model,
+                            data_loader,
+                            show=False,
+                            out_dir=None,
+                            show_score_thr=0.3):
+    model.eval()
+    results = []
+    dataset = data_loader.dataset
+    prog_bar = mmcv.ProgressBar(len(dataset))
+    for i, data in enumerate(data_loader):
+        with torch.no_grad():
+            result = model(return_loss=False, rescale=True, **data)
+
+            ########### clw note: for debug
+            # for idx, item in enumerate(result[0]):
+            #     for row in item:
+            #         print('boxw:', row[2] - row[0],  'boxh:', row[3] - row[1] )
+            #         if row[2] - row[0] == 0 or row[3] - row[1] == 0:
+            #             print('aaaa')
+            #########
+
+        ##
+        img_name = data['img_metas'][0].data[0][0]['ori_filename']
+        # origin_name = img_name.split('CAM')[0] + 'CAM' + img_name.split('CAM')[1][0] + '.jpg'
+        # data['img_metas'][0].data[0][0]['ori_filename'] = origin_name
+        # data['img_metas'][0].data[0][0]['filename'] = data['img_metas'][0].data[0][0]['filename'].rsplit('/', 1)[0] + '/' + origin_name
+
+        aaa = img_name[:-4].split('_')[-9:]
+        bbb = [float(a) for a in aaa]
+        M_perspective_inv = np.array(bbb).reshape(3, 3)
+        for i in range(len(result[0])):
+            ccc = result[0][i][:, :4]  # (n, 4)
+            if ccc.size == 0:
+                continue
+            ddd = []
+            for xyxy in ccc:
+                x1 = xyxy[0]
+                y1 = xyxy[1]
+                x2 = xyxy[2]
+                y2 = xyxy[3]
+                cnt = np.array( ((x1, y1), (x1, y2), (x2, y2), (x2, y1)))
+                ddd.append(cnt)
+            ddd = np.array(ddd)
+
+            #
+            fff = []
+            src_pts = cv2.perspectiveTransform(ddd, M_perspective_inv)
+            for cnt in src_pts:
+                rect = cv2.boundingRect(cnt)
+                x1 = rect[0]
+                y1 = rect[1]
+                x2 = rect[0] + rect[2]
+                y2 = rect[1] + rect[3]
+                ggg = np.array( (x1, y1, x2, y2 ) )
+                fff.append(ggg)
+            fff = np.array(fff)
+
+            result[0][i][:, :4] = fff  # result[0][i] = np.concatenate((fff, result[0][i][:, 4]), axis=1)
+        ##
+
+        batch_size = len(result)
+        if show or out_dir:
+            if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
+                img_tensor = data['img'][0]
+            else:
+                img_tensor = data['img'][0].data[0]
+            img_metas = data['img_metas'][0].data[0]
+            imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
+            assert len(imgs) == len(img_metas)
+
+            for i, (img, img_meta) in enumerate(zip(imgs, img_metas)):
+                h, w, _ = img_meta['img_shape']
+                img_show = img[:h, :w, :]
+
+                ori_h, ori_w = img_meta['ori_shape'][:-1]
+                img_show = mmcv.imresize(img_show, (ori_w, ori_h))
+
+                if out_dir:
+                    out_file = osp.join(out_dir, img_meta['ori_filename'])
+                else:
+                    out_file = None
+
+                model.module.show_result(
+                    img_show,
+                    result[i],
+                    show=show,
+                    out_file=out_file,
+                    score_thr=show_score_thr)
+
+        # encode mask results
+        if isinstance(result[0], tuple):
+            result = [(bbox_results, encode_mask_results(mask_results))
+                      for bbox_results, mask_results in result]
+        results.extend(result)
+
+        for _ in range(batch_size):
+            prog_bar.update()
+    return results
+
 def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
     """Test model with multiple gpus.
 

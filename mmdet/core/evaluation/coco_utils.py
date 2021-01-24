@@ -208,6 +208,14 @@ def results2json(dataset, results, out_file):
     result_files = dict()
     if isinstance(results[0], list):
         json_results = det2json(dataset, results)  # here
+        ################# clw modify: for perspective  TODO
+        for item in json_results:
+            file_name = item['name']
+            item['name'] = file_name.split('CAM')[0] + 'CAM' + file_name.split('CAM')[1][0] + '.jpg'
+        # data['img_metas'][0].data[0][0]['ori_filename'] = origin_name
+        # data['img_metas'][0].data[0][0]['filename'] = data['img_metas'][0].data[0][0]['filename'].rsplit('/', 1)[0] + '/' + origin_name
+
+        ################
         result_files['bbox'] = '{}.{}.json'.format(out_file, 'bbox')
         result_files['proposal'] = '{}.{}.json'.format(out_file, 'bbox')
         mmcv.dump(json_results, result_files['bbox'])
