@@ -213,7 +213,10 @@ def single_gpu_test_processed_img(model,
 
             ########### clw note: for debug
             # for idx, item in enumerate(result[0]):
-            #     for row in item:
+            #     if item.size == 0:
+            #         print('111')
+
+            #    for row in item:
             #         print('boxw:', row[2] - row[0],  'boxh:', row[3] - row[1] )
             #         if row[2] - row[0] == 0 or row[3] - row[1] == 0:
             #             print('aaaa')
@@ -228,11 +231,12 @@ def single_gpu_test_processed_img(model,
         aaa = img_name[:-4].split('_')[-9:]
         bbb = [float(a) for a in aaa]
         M_perspective_inv = np.array(bbb).reshape(3, 3)
+
         for i in range(len(result[0])):
+            ddd = []
             ccc = result[0][i][:, :4]  # (n, 4)
             if ccc.size == 0:
                 continue
-            ddd = []
             for xyxy in ccc:
                 x1 = xyxy[0]
                 y1 = xyxy[1]
@@ -296,6 +300,98 @@ def single_gpu_test_processed_img(model,
         for _ in range(batch_size):
             prog_bar.update()
     return results
+
+
+# clw added
+import cv2
+def single_gpu_test_processed_rect_img(model,
+                            data_loader,
+                            show=False,
+                            out_dir=None,
+                            show_score_thr=0.3):
+    model.eval()
+    results = []
+    dataset = data_loader.dataset
+    prog_bar = mmcv.ProgressBar(len(dataset))
+    for i, data in enumerate(data_loader):
+        with torch.no_grad():
+            result = model(return_loss=False, rescale=True, **data)
+
+            ########### clw note: for debug
+            # for idx, item in enumerate(result[0]):
+            #     if item.size == 0:
+            #         print('111')
+
+            #    for row in item:
+            #         print('boxw:', row[2] - row[0],  'boxh:', row[3] - row[1] )
+            #         if row[2] - row[0] == 0 or row[3] - row[1] == 0:
+            #             print('aaaa')
+            #########
+
+        ##
+        img_name = data['img_metas'][0].data[0][0]['ori_filename']
+
+
+        aaa = img_name[:-4].split('_')[-2:]
+        x_rect_left = int(aaa[0])
+        y_rect_up = int(aaa[1])
+
+        for i in range(len(result[0])):
+            ddd = []
+            ccc = result[0][i][:, :4]  # (n, 4)
+            if ccc.size == 0:
+                continue
+            for xyxy in ccc:
+                x1 = xyxy[0] + x_rect_left
+                y1 = xyxy[1] + y_rect_up
+                x2 = xyxy[2] + x_rect_left
+                y2 = xyxy[3] + y_rect_up
+                cnt = np.array( (x1, y1, x2, y2))
+                ddd.append(cnt)
+            ddd = np.array(ddd)
+
+            result[0][i][:, :4] = ddd  # result[0][i] = np.concatenate((fff, result[0][i][:, 4]), axis=1)
+        ##
+
+        batch_size = len(result)
+        if show or out_dir:
+            if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
+                img_tensor = data['img'][0]
+            else:
+                img_tensor = data['img'][0].data[0]
+            img_metas = data['img_metas'][0].data[0]
+            imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
+            assert len(imgs) == len(img_metas)
+
+            for i, (img, img_meta) in enumerate(zip(imgs, img_metas)):
+                h, w, _ = img_meta['img_shape']
+                img_show = img[:h, :w, :]
+
+                ori_h, ori_w = img_meta['ori_shape'][:-1]
+                img_show = mmcv.imresize(img_show, (ori_w, ori_h))
+
+                if out_dir:
+                    out_file = osp.join(out_dir, img_meta['ori_filename'])
+                else:
+                    out_file = None
+
+                model.module.show_result(
+                    img_show,
+                    result[i],
+                    show=show,
+                    out_file=out_file,
+                    score_thr=show_score_thr)
+
+        # encode mask results
+        if isinstance(result[0], tuple):
+            result = [(bbox_results, encode_mask_results(mask_results))
+                      for bbox_results, mask_results in result]
+        results.extend(result)
+
+        for _ in range(batch_size):
+            prog_bar.update()
+    return results
+
 
 def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
     """Test model with multiple gpus.
