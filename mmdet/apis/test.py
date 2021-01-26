@@ -23,6 +23,7 @@ def single_gpu_test(model,
                     show=False,
                     out_dir=None,
                     show_score_thr=0.3):
+    print('clw: using single_gpu_test() !!')
     model.eval()
     results = []
     dataset = data_loader.dataset
@@ -84,6 +85,7 @@ def single_gpu_test_crop_img(model,
                     show=False,
                     out_dir=None,
                     show_score_thr=0.3):
+    print('clw: using single_gpu_test_crop_img() !!')
     model.eval()
     results = []
     dataset = data_loader.dataset
@@ -198,11 +200,12 @@ def single_gpu_test_crop_img(model,
 
 # clw added
 import cv2
-def single_gpu_test_processed_img(model,
+def single_gpu_test_rotate_rect_img(model,
                             data_loader,
                             show=False,
                             out_dir=None,
                             show_score_thr=0.3):
+    print('clw: using single_gpu_test_rotate_rect_img() !!')
     model.eval()
     results = []
     dataset = data_loader.dataset
@@ -303,12 +306,12 @@ def single_gpu_test_processed_img(model,
 
 
 # clw added
-import cv2
 def single_gpu_test_processed_rect_img(model,
                             data_loader,
                             show=False,
                             out_dir=None,
                             show_score_thr=0.3):
+    print('clw: using single_gpu_test_processed_rect_img() !!')
     model.eval()
     results = []
     dataset = data_loader.dataset
@@ -392,6 +395,153 @@ def single_gpu_test_processed_rect_img(model,
             prog_bar.update()
     return results
 
+
+# clw added
+def single_gpu_test_processed_rect_crop_img(model,
+                            data_loader,
+                            show=False,
+                            out_dir=None,
+                            show_score_thr=0.3):
+    print('clw: using single_gpu_test_processed_rect_crop_img() !!')
+    model.eval()
+    results = []
+    dataset = data_loader.dataset
+    prog_bar = mmcv.ProgressBar(len(dataset))
+    for i, data in enumerate(data_loader):
+        print(data['img_metas'][0].data[0][0]['ori_filename'])
+        img_h = data['img'][0].shape[2]
+        img_w = data['img'][0].shape[3]
+        with torch.no_grad():
+            # 否则切图, 4 nums
+            ##############################
+            overlap_h = 128
+            overlap_w = 128
+            crop_h = 800
+            crop_w = 1333
+
+            step_h = crop_h - overlap_h
+            step_w = crop_w - overlap_w
+
+            nms_iou_thr = model.module.test_cfg['rcnn']['nms']['iou_threshold']
+            results_crop = [[] for _ in range(len(model.module.CLASSES))]
+            data['img_metas'][0].data[0][0]['ori_shape'] = (crop_h, crop_w)
+            data['img_metas'][0].data[0][0]['img_shape'] = (crop_h, crop_w)
+            data['img_metas'][0].data[0][0]['pad_shape'] = (crop_h, crop_w)
+            img_tensor_orig = data['img'][0].clone()
+            for start_h in range(0, img_h-crop_h+1, step_h):  # imgsz is crop step here,
+                if start_h + crop_h > img_h:  # 如果最后剩下的不到imgsz,则step少一些,保证切的图尺寸不变
+                    start_h = img_h - crop_h
+
+                for start_w in range(0, img_w-crop_w+1, step_w):
+                    if start_w + crop_w > img_w:  # 如果最后剩下的不到imgsz,则step少一些,保证切的图尺寸不变
+                        start_w = img_w - crop_w
+                    # crop
+                    print(start_h, start_w)
+                    data['img'][0] = img_tensor_orig[:, :, start_h:start_h + crop_h, start_w:start_w + crop_w]
+
+                    result = model(return_loss=False, rescale=True, **data)  # result[0]: model.module.CLASSES 个list,每个里面装着(n, 5) ndarray
+                    #result = model(return_loss=False, rescale=False, **data)  # clw modify
+                    for idx, item in enumerate(result[0]):
+                        for row in item:
+                            #print('boxw:', row[2] - row[0],  'boxh:', row[3] - row[1] )
+                            if row[2] - row[0] == 0 or row[3] - row[1] == 0:
+                                print('===================================================================')
+                                continue
+                            row[[0, 2]] += start_w
+                            row[[1, 3]] += start_h
+                            results_crop[idx].append(row)
+
+            results_afternms = []
+            for idx, res in enumerate(results_crop):
+                if len(res) == 0:
+                    results_afternms.append(np.array([])) # clw note: it's really important!!
+                    continue
+                else:
+                    prediction = torch.tensor(res)
+                    boxes, scores = prediction[:, :4], prediction[:, 4]  # boxes (offset by class), scores
+                    i = torchvision.ops.boxes.nms(boxes, scores, nms_iou_thr)
+                    results_afternms.append(prediction[i].numpy())
+            result = [ results_afternms ]
+            ##############################
+
+
+
+
+
+            ########### clw note: for debug
+            # for idx, item in enumerate(result[0]):
+            #     if item.size == 0:
+            #         print('111')
+
+            #    for row in item:
+            #         print('boxw:', row[2] - row[0],  'boxh:', row[3] - row[1] )
+            #         if row[2] - row[0] == 0 or row[3] - row[1] == 0:
+            #             print('aaaa')
+            #########
+
+        ##
+        img_name = data['img_metas'][0].data[0][0]['ori_filename']
+
+
+        aaa = img_name[:-4].split('_')[-2:]
+        x_rect_left = int(aaa[0])
+        y_rect_up = int(aaa[1])
+
+        for i in range(len(result[0])):
+            ddd = []
+            if result[0][i].size == 0:
+                continue
+            ccc = result[0][i][:, :4]  # (n, 4)
+            for xyxy in ccc:
+                x1 = xyxy[0] + x_rect_left
+                y1 = xyxy[1] + y_rect_up
+                x2 = xyxy[2] + x_rect_left
+                y2 = xyxy[3] + y_rect_up
+                cnt = np.array( (x1, y1, x2, y2))
+                ddd.append(cnt)
+            ddd = np.array(ddd)
+
+            result[0][i][:, :4] = ddd  # result[0][i] = np.concatenate((fff, result[0][i][:, 4]), axis=1)
+        ##
+
+        batch_size = len(result)
+        if show or out_dir:
+            if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
+                img_tensor = data['img'][0]
+            else:
+                img_tensor = data['img'][0].data[0]
+            img_metas = data['img_metas'][0].data[0]
+            imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
+            assert len(imgs) == len(img_metas)
+
+            for i, (img, img_meta) in enumerate(zip(imgs, img_metas)):
+                h, w, _ = img_meta['img_shape']
+                img_show = img[:h, :w, :]
+
+                ori_h, ori_w = img_meta['ori_shape'][:-1]
+                img_show = mmcv.imresize(img_show, (ori_w, ori_h))
+
+                if out_dir:
+                    out_file = osp.join(out_dir, img_meta['ori_filename'])
+                else:
+                    out_file = None
+
+                model.module.show_result(
+                    img_show,
+                    result[i],
+                    show=show,
+                    out_file=out_file,
+                    score_thr=show_score_thr)
+
+        # encode mask results
+        if isinstance(result[0], tuple):
+            result = [(bbox_results, encode_mask_results(mask_results))
+                      for bbox_results, mask_results in result]
+        results.extend(result)
+
+        for _ in range(batch_size):
+            prog_bar.update()
+    return results
 
 def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
     """Test model with multiple gpus.

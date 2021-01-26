@@ -2,7 +2,7 @@ import inspect
 
 import mmcv
 import numpy as np
-from numpy import random
+#from numpy import random  # clw delete: bad code
 
 from mmdet.core import PolygonMasks
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
@@ -855,17 +855,17 @@ class PhotoMetricDistortion(object):
             'PhotoMetricDistortion needs the input image of dtype np.float32,'\
             ' please set "to_float32=True" in "LoadImageFromFile" pipeline'
         # random brightness
-        if random.randint(2):
-            delta = random.uniform(-self.brightness_delta,
+        if np.random.randint(2):
+            delta = np.random.uniform(-self.brightness_delta,
                                    self.brightness_delta)
             img += delta
 
         # mode == 0 --> do random contrast first
         # mode == 1 --> do random contrast last
-        mode = random.randint(2)
+        mode = np.random.randint(2)
         if mode == 1:
-            if random.randint(2):
-                alpha = random.uniform(self.contrast_lower,
+            if np.random.randint(2):
+                alpha = np.random.uniform(self.contrast_lower,
                                        self.contrast_upper)
                 img *= alpha
 
@@ -873,13 +873,13 @@ class PhotoMetricDistortion(object):
         img = mmcv.bgr2hsv(img)
 
         # random saturation
-        if random.randint(2):
-            img[..., 1] *= random.uniform(self.saturation_lower,
+        if np.random.randint(2):
+            img[..., 1] *= np.random.uniform(self.saturation_lower,
                                           self.saturation_upper)
 
         # random hue
-        if random.randint(2):
-            img[..., 0] += random.uniform(-self.hue_delta, self.hue_delta)
+        if np.random.randint(2):
+            img[..., 0] += np.random.uniform(-self.hue_delta, self.hue_delta)
             img[..., 0][img[..., 0] > 360] -= 360
             img[..., 0][img[..., 0] < 0] += 360
 
@@ -888,14 +888,14 @@ class PhotoMetricDistortion(object):
 
         # random contrast
         if mode == 0:
-            if random.randint(2):
-                alpha = random.uniform(self.contrast_lower,
+            if np.random.randint(2):
+                alpha = np.random.uniform(self.contrast_lower,
                                        self.contrast_upper)
                 img *= alpha
 
         # randomly swap channels
-        if random.randint(2):
-            img = img[..., random.permutation(3)]
+        if np.random.randint(2):
+            img = img[..., np.random.permutation(3)]
 
         results['img'] = img
         return results
@@ -951,7 +951,7 @@ class Expand(object):
             dict: Result dict with images, bounding boxes expanded
         """
 
-        if random.uniform(0, 1) > self.prob:
+        if np.random.uniform(0, 1) > self.prob:
             return results
 
         if 'img_fields' in results:
@@ -960,7 +960,7 @@ class Expand(object):
         img = results['img']
 
         h, w, c = img.shape
-        ratio = random.uniform(self.min_ratio, self.max_ratio)
+        ratio = np.random.uniform(self.min_ratio, self.max_ratio)
         # speedup expand when meets large image
         if np.all(self.mean == self.mean[0]):
             expand_img = np.empty((int(h * ratio), int(w * ratio), c),
@@ -970,8 +970,8 @@ class Expand(object):
             expand_img = np.full((int(h * ratio), int(w * ratio), c),
                                  self.mean,
                                  dtype=img.dtype)
-        left = int(random.uniform(0, w * ratio - w))
-        top = int(random.uniform(0, h * ratio - h))
+        left = int(np.random.uniform(0, w * ratio - w))
+        top = int(np.random.uniform(0, h * ratio - h))
         expand_img[top:top + h, left:left + w] = img
 
         results['img'] = expand_img
@@ -1062,22 +1062,22 @@ class MinIoURandomCrop(object):
         boxes = np.concatenate(boxes, 0)
         h, w, c = img.shape
         while True:
-            mode = random.choice(self.sample_mode)
+            mode = np.random.choice(self.sample_mode)
             self.mode = mode
             if mode == 1:
                 return results
 
             min_iou = mode
             for i in range(50):
-                new_w = random.uniform(self.min_crop_size * w, w)
-                new_h = random.uniform(self.min_crop_size * h, h)
+                new_w = np.random.uniform(self.min_crop_size * w, w)
+                new_h = np.random.uniform(self.min_crop_size * h, h)
 
                 # h / w in [0.5, 2]
                 if new_h / new_w < 0.5 or new_h / new_w > 2:
                     continue
 
-                left = random.uniform(w - new_w)
-                top = random.uniform(h - new_h)
+                left = np.random.uniform(w - new_w)
+                top = np.random.uniform(h - new_h)
 
                 patch = np.array(
                     (int(left), int(top), int(left + new_w), int(top + new_h)))
@@ -1616,15 +1616,15 @@ class RandomCenterCropPad(object):
         h, w, c = img.shape
         boxes = results['gt_bboxes']
         while True:
-            scale = random.choice(self.ratios)
+            scale = np.random.choice(self.ratios)
             new_h = int(self.crop_size[0] * scale)
             new_w = int(self.crop_size[1] * scale)
             h_border = self._get_border(self.border, h)
             w_border = self._get_border(self.border, w)
 
             for i in range(50):
-                center_x = random.randint(low=w_border, high=w - w_border)
-                center_y = random.randint(low=h_border, high=h - h_border)
+                center_x = np.random.randint(low=w_border, high=w - w_border)
+                center_y = np.random.randint(low=h_border, high=h - h_border)
 
                 cropped_img, border, patch = self._crop_image_and_paste(
                     img, [center_y, center_x], [new_h, new_w])
@@ -1801,4 +1801,441 @@ class CutOut(object):
         repr_str += (f'cutout_ratio={self.candidates}, ' if self.with_ratio
                      else f'cutout_shape={self.candidates}, ')
         repr_str += f'fill_in={self.fill_in})'
+        return repr_str
+
+
+@PIPELINES.register_module()
+class AlbuMine(object):
+    """
+        ### While the gt label is empty, do aug again until the gt label is not empty.  # clw note: 这里是作者改动的地方
+    """
+
+    def __init__(self,
+                 transforms,
+                 bbox_params=None,
+                 keymap=None,
+                 update_pad_shape=False,
+                 skip_img_without_anno=False):
+        if Compose is None:
+            raise RuntimeError('albumentations is not installed')
+
+        self.transforms = transforms
+        self.filter_lost_elements = False
+        self.update_pad_shape = update_pad_shape
+        self.skip_img_without_anno = skip_img_without_anno
+
+        # A simple workaround to remove masks without boxes
+        if (isinstance(bbox_params, dict) and 'label_fields' in bbox_params
+                and 'filter_lost_elements' in bbox_params):
+            self.filter_lost_elements = True
+            self.origin_label_fields = bbox_params['label_fields']
+            bbox_params['label_fields'] = ['idx_mapper']
+            del bbox_params['filter_lost_elements']
+
+        self.bbox_params = (
+            self.albu_builder(bbox_params) if bbox_params else None)
+        self.aug = Compose([self.albu_builder(t) for t in self.transforms],
+                           bbox_params=self.bbox_params)
+
+        if not keymap:
+            self.keymap_to_albu = {
+                'img': 'image',
+                'gt_masks': 'masks',
+                'gt_bboxes': 'bboxes'
+            }
+        else:
+            self.keymap_to_albu = keymap
+        self.keymap_back = {v: k for k, v in self.keymap_to_albu.items()}
+
+    def albu_builder(self, cfg):
+        """Import a module from albumentations.
+
+        It inherits some of :func:`build_from_cfg` logic.
+
+        Args:
+            cfg (dict): Config dict. It should at least contain the key "type".
+
+        Returns:
+            obj: The constructed object.
+        """
+
+        assert isinstance(cfg, dict) and 'type' in cfg
+        args = cfg.copy()
+
+        obj_type = args.pop('type')
+        if mmcv.is_str(obj_type):
+            if albumentations is None:
+                raise RuntimeError('albumentations is not installed')
+            obj_cls = getattr(albumentations, obj_type)
+        elif inspect.isclass(obj_type):
+            obj_cls = obj_type
+        else:
+            raise TypeError(
+                f'type must be a str or valid type, but got {type(obj_type)}')
+
+        if 'transforms' in args:
+            args['transforms'] = [
+                self.albu_builder(transform)
+                for transform in args['transforms']
+            ]
+
+        return obj_cls(**args)
+
+    @staticmethod
+    def mapper(d, keymap):
+        """Dictionary mapper. Renames keys according to keymap provided.
+
+        Args:
+            d (dict): old dict
+            keymap (dict): {'old_key':'new_key'}
+        Returns:
+            dict: new dict.
+        """
+
+        updated_dict = {}
+        for k, v in zip(d.keys(), d.values()):
+            new_k = keymap.get(k, k)
+            updated_dict[new_k] = d[k]
+        return updated_dict
+
+    def __call__(self, results):
+        # dict to albumentations format
+        results = self.mapper(results, self.keymap_to_albu)
+        # TODO: add bbox_fields
+        if 'bboxes' in results:
+            # to list of boxes
+            if isinstance(results['bboxes'], np.ndarray):
+                results['bboxes'] = [x for x in results['bboxes']]
+            # add pseudo-field for filtration
+            if self.filter_lost_elements:
+                results['idx_mapper'] = np.arange(len(results['bboxes']))
+
+        # TODO: Support mask structure in albu
+        if 'masks' in results:
+            if isinstance(results['masks'], PolygonMasks):
+                raise NotImplementedError(
+                    'Albu only supports BitMap masks now')
+            ori_masks = results['masks']
+            if albumentations.__version__ < '0.5':
+                results['masks'] = results['masks'].masks
+            else:
+                results['masks'] = [mask for mask in results['masks'].masks]
+
+        ### results = self.aug(**results)
+        ### clw note: 这里是作者改动的地方
+        while True:
+            # print("Before: ", results['gt_labels'].shape)
+            results_cur = self.aug(**results)
+            # print("After: ", np.array(results_cur['gt_labels']).shape)
+            if len(results_cur['gt_labels']) > 0:
+                results = results_cur
+                break
+        ###
+        if 'bboxes' in results:
+            if isinstance(results['bboxes'], list):
+                results['bboxes'] = np.array(
+                    results['bboxes'], dtype=np.float32)
+            results['bboxes'] = results['bboxes'].reshape(-1, 4)
+
+            # filter label_fields
+            if self.filter_lost_elements:
+
+                for label in self.origin_label_fields:
+                    results[label] = np.array(
+                        [results[label][i] for i in results['idx_mapper']])
+                if 'masks' in results:
+                    results['masks'] = np.array(
+                        [results['masks'][i] for i in results['idx_mapper']])
+                    results['masks'] = ori_masks.__class__(
+                        results['masks'], results['image'].shape[0],
+                        results['image'].shape[1])
+
+                if (not len(results['idx_mapper'])
+                        and self.skip_img_without_anno):
+                    return None
+
+        if 'gt_labels' in results:
+            if isinstance(results['gt_labels'], list):
+                results['gt_labels'] = np.array(results['gt_labels'])
+            results['gt_labels'] = results['gt_labels'].astype(np.int64)
+
+        # back to the original format
+        results = self.mapper(results, self.keymap_back)
+
+        # update final shape
+        if self.update_pad_shape:
+            results['pad_shape'] = results['img'].shape
+
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__ + f'(transforms={self.transforms})'
+        return repr_str
+
+
+import cv2
+###
+@PIPELINES.register_module
+class GtBoxBasedCrop(object):
+    """
+        Crop around the gt bbox.
+        Note:
+            Here 'img_shape' is change to the shape of img_cropped.
+    """
+
+    def __init__(self, crop_size):
+        self.crop_size = crop_size  # (w, h)
+
+    def __call__(self, results):
+
+        img = results['img']
+        gt_bboxes = results['gt_bboxes']
+        gt_labels = results['gt_labels']
+
+        img_cropped, gt_bboxes_cropped, gt_labels_cropped = \
+            self._crop_patch(img, gt_bboxes, gt_labels)
+
+        results['img'] = img_cropped
+        results['gt_bboxes'] = gt_bboxes_cropped
+        results['gt_labels'] = gt_labels_cropped
+        results['img_shape'] = img_cropped.shape
+
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += '(crop_size={})'.format(self.crop_size)
+        return repr_str
+
+    def _crop_patch(self, img, gt_bboxes, gt_labels):
+
+        H, W, C = img.shape
+        px, py = self.crop_size  # 要切的patch的尺寸
+
+        if px > W or py > H:  # 如果要切的patch比图像本身还大（那就只能pad原图了，当然一般不会设置那么大，否则也不叫“切图”了...）
+            pad_w, pad_h = 0, 0
+
+            if px > W:
+                pad_w = px - W
+                W = px
+            if py > H:
+                pad_h = py - H
+                H = py
+
+            img = cv2.copyMakeBorder(img, 0, int(pad_h), 0, int(pad_w), cv2.BORDER_CONSTANT, 0)
+
+        obj_num = gt_bboxes.shape[0]
+        select_gt_id = np.random.randint(0, obj_num)  # 随机选择一个gt，准备在它四周切下一个patch
+        x1, y1, x2, y2 = gt_bboxes[select_gt_id, :]  # 选的某个gt，拿到它的 xyxy
+
+        if x2 - x1 > px:  # clw note: 如果bbox的宽度比要切的patch的宽度还宽
+            nx = np.random.randint(x1, x2 - px + 1)  # 就切一部分
+        else:  # clw note: 一般都是进这里
+            nx = np.random.randint(max(x2 - px, 0),
+                                   min(x1 + 1, W - px + 1))  # 个人感觉是不是 x1-1合适一些？甚至留一点边缘，那就是x1-border？ TODO
+
+        if y2 - y1 > py:
+            ny = np.random.randint(y1, y2 - py + 1)
+        else:
+            ny = np.random.randint(max(y2 - py, 0), min(y1 + 1, H - py + 1))
+
+        patch_coord = np.zeros((1, 4), dtype="int")
+        patch_coord[0, 0] = nx
+        patch_coord[0, 1] = ny
+        patch_coord[0, 2] = nx + px
+        patch_coord[0, 3] = ny + py
+
+        # index = self._compute_overlap(patch_coord, gt_bboxes, 0.5)
+        index = self._compute_overlap(patch_coord, gt_bboxes, 0.7)  # clw modify
+        index = np.squeeze(index, axis=0)
+        index[select_gt_id] = True  # 这里貌似写不写TRue都行，因为上面计算overlap，patch和内部的gt的overlap一定是1
+
+        patch = img[ny: ny + py, nx: nx + px, :]
+        gt_bboxes = gt_bboxes[index, :]
+        gt_labels = gt_labels[index]
+
+        gt_bboxes[:, 0] = np.maximum(gt_bboxes[:, 0] - patch_coord[0, 0], 0)  # 如果patch左边缘在gt左边缘的右边，那么这里就会算出负数，所以限制到0
+        gt_bboxes[:, 1] = np.maximum(gt_bboxes[:, 1] - patch_coord[0, 1], 0)
+        gt_bboxes[:, 2] = np.minimum(gt_bboxes[:, 2] - patch_coord[0, 0],
+                                     px - 1)  # 如果patch右边缘在gt右边缘左边，那么这里算出来的值就会比patch宽度还大，因此要限制到patch宽度
+        gt_bboxes[:, 3] = np.minimum(gt_bboxes[:, 3] - patch_coord[0, 1], py - 1)
+
+        return patch, gt_bboxes, gt_labels
+
+    def _compute_overlap(self, a, b, over_threshold=0.5):
+        """
+        Parameters
+        ----------
+        a: (N, 4) ndarray of float
+        b: (K, 4) ndarray of float
+        Returns
+        -------
+        overlaps: (N, K) ndarray of overlap between boxes and query_boxes
+        """
+        area = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
+
+        iw = np.minimum(np.expand_dims(a[:, 2], axis=1), b[:, 2]) - np.maximum(np.expand_dims(a[:, 0], 1), b[:, 0])
+        ih = np.minimum(np.expand_dims(a[:, 3], axis=1), b[:, 3]) - np.maximum(np.expand_dims(a[:, 1], 1), b[:, 1])
+
+        iw = np.maximum(iw, 0)
+        ih = np.maximum(ih, 0)
+
+        # ua = np.expand_dims((a[:, 2] - a[:, 0]) * (a[:, 3] - a[:, 1]), axis=1) + area - iw * ih
+        ua = area
+
+        ua = np.maximum(ua, np.finfo(float).eps)
+
+        intersection = iw * ih
+
+        overlap = intersection / ua
+        index = overlap > over_threshold
+        return index
+
+import random
+@PIPELINES.register_module
+class GtBoxBasedCrop_clw_v0(object):  # choose cropsize in [(768, 768), (1024, 1024), (1536, 1536)], and later resize to (1536, 1536)
+    """
+        Crop around the gt bbox.
+        Note:
+            Here 'img_shape' is change to the shape of img_cropped.
+    """
+
+    def __init__(self):
+        #self.crop_size = crop_size  # (w, h)
+        crop_sizes = [(768, 768), (1024, 1024), (1536, 1536)]
+        self.crop_size = random.sample(crop_sizes, 1)[0]  # (w, h)
+
+    def __call__(self, results):
+
+        img = results['img']
+        gt_bboxes = results['gt_bboxes']
+        gt_labels = results['gt_labels']
+
+        img_cropped, gt_bboxes_cropped, gt_labels_cropped = \
+            self._crop_patch(img, gt_bboxes, gt_labels)
+
+        results['img'] = img_cropped
+        results['gt_bboxes'] = gt_bboxes_cropped
+        results['gt_labels'] = gt_labels_cropped
+        results['img_shape'] = img_cropped.shape
+
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += '(crop_size={})'.format(self.crop_size)
+        return repr_str
+
+    def _crop_patch(self, img, gt_bboxes, gt_labels):
+
+        H, W, C = img.shape
+        px, py = self.crop_size  # 要切的patch的尺寸
+
+        if px > W or py > H:  # 如果要切的patch比图像本身还大（那就只能pad原图了，当然一般不会设置那么大，否则也不叫“切图”了...）
+            pad_w, pad_h = 0, 0
+
+            if px > W:
+                pad_w = px - W
+                W = px
+            if py > H:
+                pad_h = py - H
+                H = py
+
+            img = cv2.copyMakeBorder(img, 0, int(pad_h), 0, int(pad_w), cv2.BORDER_CONSTANT, 0)
+
+        obj_num = gt_bboxes.shape[0]
+        select_gt_id = np.random.randint(0, obj_num)  # 随机选择一个gt，准备在它四周切下一个patch
+        x1, y1, x2, y2 = gt_bboxes[select_gt_id, :]  # 选的某个gt，拿到它的 xyxy
+
+        if x2 - x1 > px:  # clw note: 如果bbox的宽度比要切的patch的宽度还宽
+            nx = np.random.randint(x1, x2 - px + 1)  # 就切一部分
+        else:  # clw note: 一般都是进这里
+            nx = np.random.randint(max(x2 - px, 0),
+                                   min(x1 + 1, W - px + 1))  # 个人感觉是不是 x1-1合适一些？甚至留一点边缘，那就是x1-border？ TODO
+
+        if y2 - y1 > py:
+            ny = np.random.randint(y1, y2 - py + 1)
+        else:
+            ny = np.random.randint(max(y2 - py, 0), min(y1 + 1, H - py + 1))
+
+        patch_coord = np.zeros((1, 4), dtype="int")
+        patch_coord[0, 0] = nx
+        patch_coord[0, 1] = ny
+        patch_coord[0, 2] = nx + px
+        patch_coord[0, 3] = ny + py
+
+        # index = self._compute_overlap(patch_coord, gt_bboxes, 0.5)
+        index = self._compute_overlap(patch_coord, gt_bboxes, 0.7)  # clw modify
+        index = np.squeeze(index, axis=0)
+        index[select_gt_id] = True  # 这里貌似写不写TRue都行，因为上面计算overlap，patch和内部的gt的overlap一定是1
+
+        patch = img[ny: ny + py, nx: nx + px, :]
+        gt_bboxes = gt_bboxes[index, :]
+        gt_labels = gt_labels[index]
+
+        gt_bboxes[:, 0] = np.maximum(gt_bboxes[:, 0] - patch_coord[0, 0], 0)  # 如果patch左边缘在gt左边缘的右边，那么这里就会算出负数，所以限制到0
+        gt_bboxes[:, 1] = np.maximum(gt_bboxes[:, 1] - patch_coord[0, 1], 0)
+        gt_bboxes[:, 2] = np.minimum(gt_bboxes[:, 2] - patch_coord[0, 0],
+                                     px - 1)  # 如果patch右边缘在gt右边缘左边，那么这里算出来的值就会比patch宽度还大，因此要限制到patch宽度
+        gt_bboxes[:, 3] = np.minimum(gt_bboxes[:, 3] - patch_coord[0, 1], py - 1)
+
+        return patch, gt_bboxes, gt_labels
+
+    def _compute_overlap(self, a, b, over_threshold=0.5):
+        """
+        Parameters
+        ----------
+        a: (N, 4) ndarray of float
+        b: (K, 4) ndarray of float
+        Returns
+        -------
+        overlaps: (N, K) ndarray of overlap between boxes and query_boxes
+        """
+        area = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
+
+        iw = np.minimum(np.expand_dims(a[:, 2], axis=1), b[:, 2]) - np.maximum(np.expand_dims(a[:, 0], 1), b[:, 0])
+        ih = np.minimum(np.expand_dims(a[:, 3], axis=1), b[:, 3]) - np.maximum(np.expand_dims(a[:, 1], 1), b[:, 1])
+
+        iw = np.maximum(iw, 0)
+        ih = np.maximum(ih, 0)
+
+        # ua = np.expand_dims((a[:, 2] - a[:, 0]) * (a[:, 3] - a[:, 1]), axis=1) + area - iw * ih
+        ua = area
+
+        ua = np.maximum(ua, np.finfo(float).eps)
+
+        intersection = iw * ih
+
+        overlap = intersection / ua
+        index = overlap > over_threshold
+        return index
+
+
+@PIPELINES.register_module
+class Bboxes_Jitter(object):
+    def __init__(self, shift_ratio=0.1):  # clw note: 0.9~1.1
+        self.shift_ratio = shift_ratio
+
+    def __call__(self, results):
+        img, gt_bboxes = results['img'], results['gt_bboxes']
+        h, w, c = img.shape
+
+        # box_w,box_h
+        box_w, box_h = gt_bboxes[:, 2] - gt_bboxes[:, 0], gt_bboxes[:, 3] - gt_bboxes[:, 1]
+
+        left = np.random.uniform(box_w * (-self.shift_ratio), box_w * self.shift_ratio)
+        top = np.random.uniform(box_h * (-self.shift_ratio), box_h * self.shift_ratio)
+        right = np.random.uniform(box_w * (-self.shift_ratio), box_w * self.shift_ratio)
+        buttom = np.random.uniform(box_h * (-self.shift_ratio), box_h * self.shift_ratio)
+
+        gt_bboxes[:, 0] = np.maximum(0, gt_bboxes[:, 0] + left).astype(int)
+        gt_bboxes[:, 1] = np.maximum(0, gt_bboxes[:, 1] + top).astype(int)
+        gt_bboxes[:, 2] = np.minimum(w - 1, gt_bboxes[:, 2] + right).astype(int)
+        gt_bboxes[:, 3] = np.minimum(h - 1, gt_bboxes[:, 3] + buttom).astype(int)
+        results['gt_bboxes'] = gt_bboxes
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += "(shift_ratio={})".format(self.shift_ratio)
         return repr_str
