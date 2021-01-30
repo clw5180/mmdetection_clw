@@ -9,8 +9,11 @@ label_ids = {name: i + 1 for i, name in enumerate(CLASSES)}
 #base_path = '/home/user/dataset/tile_round1_testA_20201231'
 #test_images_dir = os.path.join(base_path, 'testA_imgs')
 base_path = '/home/user/dataset/2021tianchi'
-test_images_dir = os.path.join(base_path, 'extract_rect---test')
-json_save_path = os.path.join(base_path, 'testA.json')
+# test_images_dir = os.path.join(base_path, 'extract_rect---test')
+# json_save_path = os.path.join(base_path, 'testA.json')
+
+test_images_dir = os.path.join(base_path, 'extract_rect---testB')
+json_save_path = os.path.join(base_path, 'testB.json')
 
 def save(images, annotations):
     ann = {}

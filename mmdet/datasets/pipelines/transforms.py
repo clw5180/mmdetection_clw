@@ -2102,6 +2102,7 @@ class GtBoxBasedCrop_clw_v0(object):  # choose cropsize in [(768, 768), (1024, 1
 
     def __init__(self):
         #self.crop_size = crop_size  # (w, h)
+        #crop_sizes = [(1024, 1024), (1536, 1536), (2048, 2048)]
         crop_sizes = [(768, 768), (1024, 1024), (1536, 1536)]
         self.crop_size = random.sample(crop_sizes, 1)[0]  # (w, h)
 
