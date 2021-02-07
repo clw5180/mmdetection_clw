@@ -12,6 +12,9 @@ from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, Normalize,
                          Pad, PhotoMetricDistortion, RandomCenterCropPad,
                          RandomCrop, RandomFlip, Resize, SegRescale)
 
+from .concat import Concat
+from .concat_6channel import Concat6
+
 __all__ = [
     'Compose', 'to_tensor', 'ToTensor', 'ImageToTensor', 'ToDataContainer',
     'Transpose', 'Collect', 'DefaultFormatBundle', 'LoadAnnotations',
@@ -22,4 +25,5 @@ __all__ = [
     'InstaBoost', 'RandomCenterCropPad', 'AutoAugment', 'CutOut', 'Shear',
     'Rotate', 'ColorTransform', 'EqualizeTransform', 'BrightnessTransform',
     'ContrastTransform', 'Translate'
+    ,'Concat', Concat6 # clw modify
 ]

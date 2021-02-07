@@ -7,10 +7,13 @@ from .transformer import (FFN, MultiheadAttention, Transformer,
                           TransformerDecoder, TransformerDecoderLayer,
                           TransformerEncoder, TransformerEncoderLayer)
 
+from .scale import Scale, Scale_channel  # clw modify
+
 __all__ = [
     'ResLayer', 'gaussian_radius', 'gen_gaussian_target', 'MultiheadAttention',
     'FFN', 'TransformerEncoderLayer', 'TransformerEncoder',
     'TransformerDecoderLayer', 'TransformerDecoder', 'Transformer',
     'build_transformer', 'build_positional_encoding', 'SinePositionalEncoding',
     'LearnedPositionalEncoding'
+    ,'Scale', 'Scale_channel'
 ]

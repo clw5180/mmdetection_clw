@@ -20,7 +20,8 @@ class SingleStageDetector(BaseDetector):
                  bbox_head=None,
                  train_cfg=None,
                  test_cfg=None,
-                 pretrained=None):
+                 pretrained=None,
+                 style=None):  # clw add
         super(SingleStageDetector, self).__init__()
         self.backbone = build_backbone(backbone)
         if neck is not None:

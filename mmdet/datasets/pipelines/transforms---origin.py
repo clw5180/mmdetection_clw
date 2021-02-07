@@ -202,61 +202,33 @@ class Resize(object):
     def _resize_img(self, results):
         """Resize images with ``results['scale']``."""
         for key in results.get('img_fields', ['img']):
-            if results['concat']:  # clw modify
-                img_raw, img_temp = results[key][:, :, :3], results[key][:, :, 3:]
-                if self.keep_ratio:
-                    img_raw_new, scale_factor = mmcv.imrescale(
-                        img_raw, results['scale'], return_scale=True, backend=self.backend)
-                    img_temp_new, scale_factor = mmcv.imrescale(
-                        img_temp, results['scale'], return_scale=True, backend=self.backend)
-                    # the w_scale and h_scale has minor difference
-                    # a real fix should be done in the mmcv.imrescale in the future
-                    new_h, new_w = img_raw_new.shape[:2]
-                    h, w = img_raw.shape[:2]
-                    w_scale = new_w / w
-                    h_scale = new_h / h
-                else:
-                    img_raw_new, w_scale, h_scale = mmcv.imresize(
-                        img_raw, results['scale'], return_scale=True,  backend=self.backend)
-                    img_temp_new, w_scale, h_scale = mmcv.imresize(
-                        img_temp, results['scale'], return_scale=True,  backend=self.backend)
-                scale_factor = np.array([w_scale, h_scale, w_scale, h_scale],
-                                        dtype=np.float32)
-                results[key] = np.concatenate([img_raw_new, img_temp_new], axis=2)  # clw modify
-                results['img_shape'] = img_raw_new.shape
-                results['pad_shape'] = img_raw_new.shape  # in case that there is no padding
-                results['scale_factor'] = scale_factor
-                results['keep_ratio'] = self.keep_ratio
-
+            if self.keep_ratio:
+                img, scale_factor = mmcv.imrescale(
+                    results[key],
+                    results['scale'],
+                    return_scale=True,
+                    backend=self.backend)
+                # the w_scale and h_scale has minor difference
+                # a real fix should be done in the mmcv.imrescale in the future
+                new_h, new_w = img.shape[:2]
+                h, w = results[key].shape[:2]
+                w_scale = new_w / w
+                h_scale = new_h / h
             else:
-                if self.keep_ratio:
-                    img, scale_factor = mmcv.imrescale(
-                        results[key],
-                        results['scale'],
-                        return_scale=True,
-                        backend=self.backend)
-                    # the w_scale and h_scale has minor difference
-                    # a real fix should be done in the mmcv.imrescale in the future
-                    new_h, new_w = img.shape[:2]
-                    h, w = results[key].shape[:2]
-                    w_scale = new_w / w
-                    h_scale = new_h / h
-                else:
-                    img, w_scale, h_scale = mmcv.imresize(
-                        results[key],
-                        results['scale'],
-                        return_scale=True,
-                        backend=self.backend)
-                scale_factor = np.array([w_scale, h_scale, w_scale, h_scale],
-                                        dtype=np.float32)
-                results[key] = img
-                results['img_shape'] = img.shape
-                # in case that there is no padding
-                results['pad_shape'] = img.shape
-                results['scale_factor'] = scale_factor
-                results['keep_ratio'] = self.keep_ratio
+                img, w_scale, h_scale = mmcv.imresize(
+                    results[key],
+                    results['scale'],
+                    return_scale=True,
+                    backend=self.backend)
+            results[key] = img
 
-
+            scale_factor = np.array([w_scale, h_scale, w_scale, h_scale],
+                                    dtype=np.float32)
+            results['img_shape'] = img.shape
+            # in case that there is no padding
+            results['pad_shape'] = img.shape
+            results['scale_factor'] = scale_factor
+            results['keep_ratio'] = self.keep_ratio
 
     def _resize_bboxes(self, results):
         """Resize bounding boxes with ``results['scale_factor']``."""
@@ -524,32 +496,16 @@ class Pad(object):
     def _pad_img(self, results):
         """Pad images according to ``self.size``."""
         for key in results.get('img_fields', ['img']):
-            if results['concat']:
-                img_raw, img_temp = results['img'][:, :, :3], results['img'][:, :, 3:]
-                if self.size is not None:
-                    padded_img_raw = mmcv.impad(img_raw, self.size)
-                    padded_img_temp = mmcv.impad(img_temp, self.size)
-                elif self.size_divisor is not None:
-                    padded_img_raw = mmcv.impad_to_multiple(
-                        img_raw, self.size_divisor, pad_val=self.pad_val)
-                    padded_img_temp = mmcv.impad_to_multiple(
-                        img_temp, self.size_divisor, pad_val=self.pad_val)
-                results[key] = np.concatenate([padded_img_raw, padded_img_temp], axis=2)  # clw modify
-                results['pad_shape'] = padded_img_raw.shape
-                results['pad_fixed_size'] = self.size
-                results['pad_size_divisor'] = self.size_divisor
-
-            else:
-                if self.size is not None:
-                    padded_img = mmcv.impad(
-                        results[key], shape=self.size, pad_val=self.pad_val)
-                elif self.size_divisor is not None:
-                    padded_img = mmcv.impad_to_multiple(
-                        results[key], self.size_divisor, pad_val=self.pad_val)
-                results[key] = padded_img
-                results['pad_shape'] = padded_img.shape
-                results['pad_fixed_size'] = self.size
-                results['pad_size_divisor'] = self.size_divisor
+            if self.size is not None:
+                padded_img = mmcv.impad(
+                    results[key], shape=self.size, pad_val=self.pad_val)
+            elif self.size_divisor is not None:
+                padded_img = mmcv.impad_to_multiple(
+                    results[key], self.size_divisor, pad_val=self.pad_val)
+            results[key] = padded_img
+        results['pad_shape'] = padded_img.shape
+        results['pad_fixed_size'] = self.size
+        results['pad_size_divisor'] = self.size_divisor
 
     def _pad_masks(self, results):
         """Pad masks according to ``results['pad_shape']``."""
@@ -615,15 +571,10 @@ class Normalize(object):
                 result dict.
         """
         for key in results.get('img_fields', ['img']):
-            if results['concat']:
-                img_raw, img_temp = results['img'][:, :, :3], results['img'][:, :, 3:]
-                img_raw = mmcv.imnormalize(img_raw, self.mean, self.std,self.to_rgb)
-                img_temp = mmcv.imnormalize(img_temp, self.mean, self.std,self.to_rgb)
-                results[key] = np.concatenate([img_raw, img_temp], axis=2)  # clw modify
-                results['img_norm_cfg'] = dict( mean=self.mean, std=self.std, to_rgb=self.to_rgb)
-            else:
-                results[key] = mmcv.imnormalize(results[key], self.mean, self.std, self.to_rgb)
-                results['img_norm_cfg'] = dict(mean=self.mean, std=self.std, to_rgb=self.to_rgb)
+            results[key] = mmcv.imnormalize(results[key], self.mean, self.std,
+                                            self.to_rgb)
+        results['img_norm_cfg'] = dict(
+            mean=self.mean, std=self.std, to_rgb=self.to_rgb)
         return results
 
     def __repr__(self):

@@ -414,10 +414,10 @@ def single_gpu_test_processed_rect_crop_img(model,
         with torch.no_grad():
             # 否则切图, 4 nums
             ##############################
-            overlap_h = 128
-            overlap_w = 128
-            crop_h = 800
-            crop_w = 1333
+            overlap_h = 256
+            overlap_w = 256
+            crop_h = 2048
+            crop_w = 2048
 
             step_h = crop_h - overlap_h
             step_w = crop_w - overlap_w
