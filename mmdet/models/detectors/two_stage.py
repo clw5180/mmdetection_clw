@@ -7,6 +7,8 @@ from .base import BaseDetector
 
 from mmdet.models.utils import Scale, Scale_channel
 
+USE_SUB_FEATURE=True  # clw modify
+
 @DETECTORS.register_module()
 class TwoStageDetector(BaseDetector):
     """Base class for two-stage detectors.
@@ -48,7 +50,8 @@ class TwoStageDetector(BaseDetector):
 
         self.init_weights(pretrained=pretrained)
 
-        self.style = 'vector_add_feat'
+        #self.style = 'vector_add_feat'
+        self.style = 'sub_feat'
         if self.style == 'sub_feat':
             self.scale_a = Scale(0.5)
             self.scale_b = Scale(0.5)
@@ -95,8 +98,7 @@ class TwoStageDetector(BaseDetector):
 
     def extract_feat_pair(self, img):
         if self.style is not None:
-            # img: b, 2*c = 6, h, w
-            b, c, h, w = img.shape
+            b, c, h, w = img.shape  # bs, 6, h, w
             img = img.reshape(-1, c // 2, h, w)  # 4,6,1536,1536-> 8,3,1536,1536
             # img: 2*b, c, h, w
             ### clw note: reshape makes pair img's feature in adjacent lines
@@ -197,8 +199,10 @@ class TwoStageDetector(BaseDetector):
             dict[str, Tensor]: a dictionary of loss components
         """
 
-
-        x = self.extract_feat_pair(img)   # clw note: fpn result
+        if USE_SUB_FEATURE:
+            x = self.extract_feat_pair(img)   # clw note: fpn result ((bs, 256, h/4, w/4), (bs, 256, h/8, w/8), .... (bs, 256, h/64, w/64))
+        else:
+            x = self.extract_feat(img)
         #x : tuple,5 layer
         losses = dict()
 
@@ -247,8 +251,11 @@ class TwoStageDetector(BaseDetector):
         """Test without augmentation."""
         assert self.with_bbox, 'Bbox head must be implemented.'
 
-        #x = self.extract_feat(img)  # 5 tensor: (1, 256, h/8, w/8), (1, 256, h/16, w/16)... (1, 256, h/128, w/128)
-        x = self.extract_feat_pair(img)  # clw modify
+
+        if USE_SUB_FEATURE:
+            x = self.extract_feat_pair(img)  # clw modify
+        else:
+            x = self.extract_feat(img)  # 5 tensor: (1, 256, h/8, w/8), (1, 256, h/16, w/16)... (1, 256, h/128, w/128)
 
         if proposals is None:
             proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)  # clw note: (1000, 5)

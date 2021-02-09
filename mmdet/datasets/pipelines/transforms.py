@@ -202,7 +202,8 @@ class Resize(object):
     def _resize_img(self, results):
         """Resize images with ``results['scale']``."""
         for key in results.get('img_fields', ['img']):
-            if results['concat']:  # clw modify
+            if 'concat' in results:
+            #if results['concat']:  # clw modify
                 img_raw, img_temp = results[key][:, :, :3], results[key][:, :, 3:]
                 if self.keep_ratio:
                     img_raw_new, scale_factor = mmcv.imrescale(
@@ -524,7 +525,8 @@ class Pad(object):
     def _pad_img(self, results):
         """Pad images according to ``self.size``."""
         for key in results.get('img_fields', ['img']):
-            if results['concat']:
+            if 'concat' in results:
+            #if results['concat']:
                 img_raw, img_temp = results['img'][:, :, :3], results['img'][:, :, 3:]
                 if self.size is not None:
                     padded_img_raw = mmcv.impad(img_raw, self.size)
@@ -615,7 +617,8 @@ class Normalize(object):
                 result dict.
         """
         for key in results.get('img_fields', ['img']):
-            if results['concat']:
+            if 'concat' in results:
+            #if results['concat']:
                 img_raw, img_temp = results['img'][:, :, :3], results['img'][:, :, 3:]
                 img_raw = mmcv.imnormalize(img_raw, self.mean, self.std,self.to_rgb)
                 img_temp = mmcv.imnormalize(img_temp, self.mean, self.std,self.to_rgb)

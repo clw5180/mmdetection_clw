@@ -62,6 +62,7 @@ class CustomDataset(Dataset):
                  proposal_file=None,
                  test_mode=False,
                  filter_empty_gt=True):
+                 #filter_empty_gt=False):   # clw modify
         self.ann_file = ann_file
         self.data_root = data_root
         self.img_prefix = img_prefix
