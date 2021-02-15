@@ -171,7 +171,8 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
                 bbox_results['bbox_pred'],
                 bbox_results['TSD_cls_score'],
                 bbox_results['TSD_bbox_pred'],
-                self.train_cfg.rcnn,  # old version have .rcnn
+                #self.train_cfg.rcnn,  # clw note: old version have .rcnn
+                self.train_cfg,
                 img_metas,
             )
             loss_bbox = self.bbox_head.loss(bbox_results['cls_score'],
@@ -296,16 +297,32 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         rois_r[:, 3] = rois[:, 3] + delta_r[:, 0] * scale * w
         rois_r[:, 4] = rois[:, 4] + delta_r[:, 1] * scale * h
 
-        det_bboxes, det_labels = self.bbox_head.get_det_bboxes(
-            rois_r,
-            TSD_cls_score,
-            TSD_bbox_pred,
-            img_shape,
-            scale_factor,
-            rescale=rescale,
-            cfg=rcnn_test_cfg,
-        )
+        #det_bboxes, det_labels = self.bbox_head.get_det_bboxes(  # clw note: old version is get_det_bboxes
+
+        # apply bbox post-processing to each image individually   # clw note: different from v1.0
+        det_bboxes = []
+        det_labels = []
+        det_bbox, det_label = self.bbox_head.get_bboxes(
+                rois_r,
+                TSD_cls_score,
+                TSD_bbox_pred,
+                img_shape,
+                scale_factor,
+                rescale=rescale,
+                cfg=rcnn_test_cfg)
+        det_bboxes.append(det_bbox)
+        det_labels.append(det_label)
         return det_bboxes, det_labels
+        # det_bboxes, det_labels = self.bbox_head.get_bboxes(
+        #     rois_r,
+        #     TSD_cls_score,
+        #     TSD_bbox_pred,
+        #     img_shape,
+        #     scale_factor,
+        #     rescale=rescale,
+        #     cfg=rcnn_test_cfg,
+        # )
+        # return det_bboxes, det_labels
 
 
     def simple_test(self,
@@ -321,7 +338,7 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         #     x, img_metas, proposal_list, self.test_cfg, rescale=rescale)
         if self.use_TSD:
             det_bboxes, det_labels = self.tsd_simple_test_bboxes(
-                x, img_metas, proposal_list, self.test_cfg.rcnn, rescale=rescale  # clw note: old version have .rcnn
+                x, img_metas, proposal_list, self.test_cfg, rescale=rescale  # clw note: old version is self.test_cfg.rcnn
             )
         else:
             det_bboxes, det_labels = self.simple_test_bboxes(

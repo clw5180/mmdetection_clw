@@ -7,7 +7,7 @@ from .base import BaseDetector
 
 from mmdet.models.utils import Scale, Scale_channel
 
-USE_SUB_FEATURE=True  # clw modify
+USE_SUB_FEATURE=False  # clw modify
 
 @DETECTORS.register_module()
 class TwoStageDetector(BaseDetector):
@@ -94,7 +94,7 @@ class TwoStageDetector(BaseDetector):
         x = self.backbone(img)
         if self.with_neck:
             x = self.neck(x)
-        return x
+        return x  # clw note: x: ((8, 256, h/4, w/4), (), (), (),  (8, 256, h/64, w/64))
 
     def extract_feat_pair(self, img):
         if self.style is not None:
@@ -210,7 +210,7 @@ class TwoStageDetector(BaseDetector):
         if self.with_rpn:
             proposal_cfg = self.train_cfg.get('rpn_proposal',
                                               self.test_cfg.rpn)
-            rpn_losses, proposal_list = self.rpn_head.forward_train(
+            rpn_losses, proposal_list = self.rpn_head.forward_train(  # clw note: [(1000, 5), (1000, 5)..... (1000, 5) ] total num is bs
                 x,
                 img_metas,
                 gt_bboxes,

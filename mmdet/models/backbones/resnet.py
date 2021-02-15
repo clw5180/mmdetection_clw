@@ -634,7 +634,7 @@ class ResNet(nn.Module):
             x = res_layer(x)
             if i in self.out_indices:
                 outs.append(x)
-        return tuple(outs)
+        return tuple(outs)  # clw note: outs:[(8, 256, h/4, w/4), (8, 256, h/8, w/8), (), ()]
 
     def train(self, mode=True):
         """Convert the model into training mode while keep normalization layer

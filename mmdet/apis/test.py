@@ -41,6 +41,7 @@ def single_gpu_test(model,
             #########
 
         batch_size = len(result)
+        #batch_size = data["img"][0].size(0)  # clw modify: for TSD model
         if show or out_dir:
             if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
                 img_tensor = data['img'][0]

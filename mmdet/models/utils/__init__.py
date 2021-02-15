@@ -14,12 +14,19 @@ from .conv_ws import ConvWS2d, conv_ws_2d
 from .norm import build_norm_layer
 
 from .dcn import (
-    # DeformConv,
-    # DeformConvPack,
-    # DeformRoIPooling,
-    # DeformRoIPoolingPack,
+    DeformConv,
+    DeformConvPack,
+    DeformRoIPooling,
+    DeformRoIPoolingPack,
     DeltaCPooling,
-    DeltaRPooling)
+    DeltaRPooling,
+    ModulatedDeformConv,
+    ModulatedDeformConvPack,
+    ModulatedDeformRoIPoolingPack,
+    deform_conv,
+    deform_roi_pooling,
+    modulated_deform_conv,
+)
 
 __all__ = [
     'ResLayer', 'gaussian_radius', 'gen_gaussian_target', 'MultiheadAttention',
@@ -29,5 +36,16 @@ __all__ = [
     'LearnedPositionalEncoding'
     ,'Scale', 'Scale_channel'
     ,'conv_ws_2d', 'ConvWS2d', 'build_norm_layer'
-    ,'DeltaCPooling', 'DeltaCPooling'
+    ,"DeformConv",
+    "DeformConvPack",
+    "DeformRoIPooling",
+    "DeformRoIPoolingPack",
+    "ModulatedDeformRoIPoolingPack",
+    "ModulatedDeformConv",
+    "ModulatedDeformConvPack",
+    "deform_conv",
+    "modulated_deform_conv",
+    "DeltaRPooling",
+    "DeltaCPooling",
+    "deform_roi_pooling"
 ]
