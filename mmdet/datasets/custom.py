@@ -61,8 +61,8 @@ class CustomDataset(Dataset):
                  seg_prefix=None,
                  proposal_file=None,
                  test_mode=False,
-                 filter_empty_gt=True):
-                 #filter_empty_gt=False):   # clw modify
+                 filter_empty_gt=True):   # clw note: delete negative sample
+                 #filter_empty_gt=False):
         self.ann_file = ann_file
         self.data_root = data_root
         self.img_prefix = img_prefix

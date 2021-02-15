@@ -188,7 +188,7 @@ def main():
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])
         #outputs = single_gpu_test(model, data_loader, args.show, args.show_dir, args.show_score_thr)
-        # outputs = single_gpu_test_crop_img(model, data_loader, args.show, args.show_dir, args.show_score_thr)  # clw modify
+        #outputs = single_gpu_test_crop_img(model, data_loader, args.show, args.show_dir, args.show_score_thr)  # clw modify
         ###### outputs = single_gpu_test_rotate_rect_img(model, data_loader, args.show, args.show_dir, args.show_score_thr)  # clw modify
         outputs = single_gpu_test_processed_rect_img(model, data_loader, args.show, args.show_dir, args.show_score_thr)  # clw modify
         ####### outputs = single_gpu_test_processed_rect_crop_img(model, data_loader, args.show, args.show_dir, args.show_score_thr)  # clw modify

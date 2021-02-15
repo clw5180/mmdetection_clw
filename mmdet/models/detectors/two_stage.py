@@ -7,7 +7,7 @@ from .base import BaseDetector
 
 from mmdet.models.utils import Scale, Scale_channel
 
-USE_SUB_FEATURE=True  # clw modify
+USE_SUB_FEATURE=False  # clw modify
 
 @DETECTORS.register_module()
 class TwoStageDetector(BaseDetector):

@@ -40,7 +40,7 @@ def build_conv_layer(cfg, *args, **kwargs):
 
 
 class ConvModule(nn.Module):
-    """A conv block that contains conv/norm/activation layers.
+    """A conv block that contains convDeformConv/norm/activation layers.
     Args:
         in_channels (int): Same as nn.Conv2d.
         out_channels (int): Same as nn.Conv2d.

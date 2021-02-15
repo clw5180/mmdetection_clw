@@ -9,7 +9,8 @@ from mmcv.runner import get_dist_info
 from mmcv.utils import Registry, build_from_cfg
 from torch.utils.data import DataLoader
 
-from .samplers import DistributedGroupSampler, DistributedSampler, GroupSampler
+from .samplers import DistributedGroupSampler, DistributedSampler, GroupSampler,  \
+    ClassAwareSampler # clw modify
 
 if platform.system() != 'Windows':
     # https://github.com/pytorch/pytorch/issues/973
@@ -115,6 +116,7 @@ def build_dataloader(dataset,
         num_workers = workers_per_gpu
     else:
         sampler = GroupSampler(dataset, samples_per_gpu) if shuffle else None
+        #sampler = ClassAwareSampler(dataset, '/home/user/dataset/2021tianchi/tile_round2_train_20210208/2021tianchi_class_sample_train.pkl') if shuffle else None
         batch_size = num_gpus * samples_per_gpu
         num_workers = num_gpus * workers_per_gpu
 

@@ -7,11 +7,19 @@ from .transformer import (FFN, MultiheadAttention, Transformer,
                           TransformerDecoder, TransformerDecoderLayer,
                           TransformerEncoder, TransformerEncoderLayer)
 
-# clw modify
+##################### clw modify
 from .scale import Scale, Scale_channel
 from .conv_module import ConvModule, build_conv_layer
 from .conv_ws import ConvWS2d, conv_ws_2d
 from .norm import build_norm_layer
+
+from .dcn import (
+    # DeformConv,
+    # DeformConvPack,
+    # DeformRoIPooling,
+    # DeformRoIPoolingPack,
+    DeltaCPooling,
+    DeltaRPooling)
 
 __all__ = [
     'ResLayer', 'gaussian_radius', 'gen_gaussian_target', 'MultiheadAttention',
@@ -21,4 +29,5 @@ __all__ = [
     'LearnedPositionalEncoding'
     ,'Scale', 'Scale_channel'
     ,'conv_ws_2d', 'ConvWS2d', 'build_norm_layer'
+    ,'DeltaCPooling', 'DeltaCPooling'
 ]
