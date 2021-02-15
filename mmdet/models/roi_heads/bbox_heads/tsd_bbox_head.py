@@ -2,13 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from mmdet.core import (
-    auto_fp16,
-    bbox_target_tsd,
-    delta2bbox,
-    force_fp32,
-    multiclass_nms,
-)
+
 #from mmdet.ops import ConvModule, DeltaCPooling, DeltaRPooling
 from mmdet.models.utils import ConvModule, DeltaCPooling, DeltaRPooling
 
@@ -16,6 +10,84 @@ from mmdet.models import accuracy
 #from ..registry import HEADS
 from mmdet.models.builder import HEADS
 from .bbox_head import BBoxHead
+
+
+from mmdet.core.bbox.coder.delta_xywh_bbox_coder import delta2bbox
+from mmdet.core import (multi_apply,
+    auto_fp16,
+    #bbox_target_tsd,
+    #delta2bbox,
+    force_fp32,
+    multiclass_nms,
+)
+def bbox_target_tsd(
+    pos_bboxes_list,
+    neg_bboxes_list,
+    pos_gt_bboxes_list,
+    pos_gt_labels_list,
+    rois,
+    delta_c,
+    delta_r,
+    cls_score_,
+    bbox_pred_,
+    TSD_cls_score_,
+    TSD_bbox_pred_,
+    cfg,
+    reg_classes=1,
+    cls_pc_margin=0.2,
+    loc_pc_margin=0.2,
+    target_means=[0.0, 0.0, 0.0, 0.0],
+    target_stds=[1.0, 1.0, 1.0, 1.0],
+    concat=True,
+):
+    labels, label_weights, bbox_targets, bbox_weights, TSD_labels, TSD_label_weights, TSD_bbox_targets, TSD_bbox_weights, pc_cls_loss, pc_loc_loss = multi_apply(
+        bbox_target_single_tsd,
+        pos_bboxes_list,
+        neg_bboxes_list,
+        pos_gt_bboxes_list,
+        pos_gt_labels_list,
+        rois,
+        delta_c,
+        delta_r,
+        cls_score_,
+        bbox_pred_,
+        TSD_cls_score_,
+        TSD_bbox_pred_,
+        cfg=cfg,
+        reg_classes=reg_classes,
+        cls_pc_margin=cls_pc_margin,
+        loc_pc_margin=loc_pc_margin,
+        target_means=target_means,
+        target_stds=target_stds,
+    )
+
+    if concat:
+        labels = torch.cat(labels, 0)
+        label_weights = torch.cat(label_weights, 0)
+        bbox_targets = torch.cat(bbox_targets, 0)
+        bbox_weights = torch.cat(bbox_weights, 0)
+
+        TSD_labels = torch.cat(TSD_labels, 0)
+        TSD_label_weights = torch.cat(TSD_label_weights, 0)
+        TSD_bbox_targets = torch.cat(TSD_bbox_targets, 0)
+        TSD_bbox_weights = torch.cat(TSD_bbox_weights, 0)
+
+        pc_cls_loss = torch.cat(pc_cls_loss, 0)
+        pc_loc_loss = torch.cat(pc_loc_loss, 0)
+
+    return (
+        labels,
+        label_weights,
+        bbox_targets,
+        bbox_weights,
+        TSD_labels,
+        TSD_label_weights,
+        TSD_bbox_targets,
+        TSD_bbox_weights,
+        pc_cls_loss,
+        pc_loc_loss,
+    )
+
 
 
 @HEADS.register_module
