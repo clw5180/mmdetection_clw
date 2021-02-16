@@ -14,6 +14,7 @@ from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, Normalize,
 
 from .concat import Concat
 from .concat_6channel import Concat6
+from .loading import LoadMosaicImageAndAnnotations
 
 __all__ = [
     'Compose', 'to_tensor', 'ToTensor', 'ImageToTensor', 'ToDataContainer',
@@ -25,5 +26,5 @@ __all__ = [
     'InstaBoost', 'RandomCenterCropPad', 'AutoAugment', 'CutOut', 'Shear',
     'Rotate', 'ColorTransform', 'EqualizeTransform', 'BrightnessTransform',
     'ContrastTransform', 'Translate'
-    ,'Concat', Concat6 # clw modify
+    ,'Concat', 'Concat6', 'LoadMosaicImageAndAnnotations' # clw modify
 ]

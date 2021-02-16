@@ -12,7 +12,10 @@ from .voc import VOCDataset
 from .wider_face import WIDERFaceDataset
 from .xml_style import XMLDataset
 
+### clw modify
 from .tiledataset import TileDataset
+from .mosaic import MosaicDataset
+from .tilemosaicdataset import TileMosaicDataset
 
 __all__ = [
     'CustomDataset', 'XMLDataset', 'CocoDataset', 'DeepFashionDataset',
@@ -21,5 +24,5 @@ __all__ = [
     'DistributedSampler', 'build_dataloader', 'ConcatDataset', 'RepeatDataset',
     'ClassBalancedDataset', 'WIDERFaceDataset', 'DATASETS', 'PIPELINES',
     'build_dataset', 'replace_ImageToTensor'
-    ,'TileDataset'
+    ,'TileDataset', 'MosaicDataset', 'TileMosaicDataset'
 ]
