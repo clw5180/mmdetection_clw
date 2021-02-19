@@ -524,7 +524,8 @@ class LoadMosaicImageAndAnnotations(object):
         #print(imsize)
         w, h = self.image_shape[0], self.image_shape[1]
         s = imsize // 2
-        xc, yc = [int(random.uniform(imsize * 0.25, imsize * 0.75)) for _ in range(2)]  # center x, y
+        #xc, yc = [int(random.uniform(imsize * 0.25, imsize * 0.75)) for _ in range(2)]  # center x, y
+        xc, yc = [int(random.uniform(imsize * 0.4, imsize * 0.6)) for _ in range(2)]  # clw modify
         result_image = np.full((imsize, imsize, 3), 0, dtype=np.float32)  # large image, will be composed by 4 small images
 
         for i, index in enumerate(indexes):
@@ -620,7 +621,7 @@ class LoadMosaicImageAndAnnotations(object):
 
         results['filename'] = filename
         results['ori_filename'] = results['img_info']['filename']
-        result_image = img_as_ubyte(result_image / 255.0)
+        #result_image = img_as_ubyte(result_image / 255.0)  # clw delete
         if self.hsv_aug:
             augment_hsv(img=result_image, hgain=self.h_gain, sgain=self.s_gain, vgain=self.v_gain)
         results['img'] = result_image
@@ -628,7 +629,7 @@ class LoadMosaicImageAndAnnotations(object):
         results['ori_shape'] = result_image.shape
         # Set initial values for default meta_keys
         results['pad_shape'] = result_image.shape
-        results['scale_factor'] = 1.0
+        #results['scale_factor'] = 1.0   # clw delete: if so, the Resize() after this is invalid
         num_channels = 1 if len(result_image.shape) < 3 else result_image.shape[2]
         results['img_norm_cfg'] = dict(
             mean=np.zeros(num_channels, dtype=np.float32),

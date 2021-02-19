@@ -14,6 +14,7 @@ from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, Normalize,
 
 from .concat import Concat
 from .concat_6channel import Concat6
+from .concat_template import ConcatTemplate, LoadTemplate
 from .loading import LoadMosaicImageAndAnnotations
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     'Rotate', 'ColorTransform', 'EqualizeTransform', 'BrightnessTransform',
     'ContrastTransform', 'Translate'
     ,'Concat', 'Concat6', 'LoadMosaicImageAndAnnotations' # clw modify
+    ,'ConcatTemplate', 'LoadTemplate'
 ]
