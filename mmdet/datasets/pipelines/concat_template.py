@@ -35,6 +35,7 @@ class LoadTemplate(object):
             self.template_path)
         return repr_str
 
+
 @PIPELINES.register_module()
 class ConcatTemplate(object):
     """Concat two image.

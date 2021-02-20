@@ -1,106 +1,47 @@
+from ..builder import DETECTORS
+from .two_stage import TwoStageDetector
+
 import torch
 import torch.nn as nn
 
-# from mmdet.core import bbox2result, bbox2roi, build_assigner, build_sampler
-from ..builder import DETECTORS, build_backbone, build_head, build_neck
-from .base import BaseDetector
+from mmdet.models.utils import Scale, Scale_channel
 
 
 @DETECTORS.register_module()
-class TwoStageDetector(BaseDetector):
-    """Base class for two-stage detectors.
-
-    Two-stage detectors typically consisting of a region proposal network and a
-    task-specific regression head.
-    """
+class DualFasterRCNN(TwoStageDetector):
+    """Implementation of `Faster R-CNN <https://arxiv.org/abs/1506.01497>`_"""
 
     def __init__(self,
                  backbone,
+                 rpn_head,
+                 roi_head,
+                 train_cfg,
+                 test_cfg,
                  neck=None,
-                 rpn_head=None,
-                 roi_head=None,
-                 train_cfg=None,
-                 test_cfg=None,
-                 pretrained=None):
-        super(TwoStageDetector, self).__init__()
-        self.backbone = build_backbone(backbone)
+                 pretrained=None,
+                 dual_train=True,
+                 dual_test=True,
+                 # template_train=False,
+                 style='sub_feat'):
+        super(DualFasterRCNN, self).__init__(
+            backbone=backbone,
+            neck=neck,
+            rpn_head=rpn_head,
+            roi_head=roi_head,
+            train_cfg=train_cfg,
+            test_cfg=test_cfg,
+            pretrained=pretrained)
 
-        if neck is not None:
-            self.neck = build_neck(neck)
-
-        if rpn_head is not None:
-            rpn_train_cfg = train_cfg.rpn if train_cfg is not None else None
-            rpn_head_ = rpn_head.copy()
-            rpn_head_.update(train_cfg=rpn_train_cfg, test_cfg=test_cfg.rpn)
-            self.rpn_head = build_head(rpn_head_)
-
-        if roi_head is not None:
-            # update train and test cfg here for now
-            # TODO: refactor assigner & sampler
-            rcnn_train_cfg = train_cfg.rcnn if train_cfg is not None else None
-            roi_head.update(train_cfg=rcnn_train_cfg)
-            roi_head.update(test_cfg=test_cfg.rcnn)
-            self.roi_head = build_head(roi_head)
-
-        self.train_cfg = train_cfg
-        self.test_cfg = test_cfg
-
-        self.init_weights(pretrained=pretrained)
-
-    @property
-    def with_rpn(self):
-        """bool: whether the detector has RPN"""
-        return hasattr(self, 'rpn_head') and self.rpn_head is not None
-
-    @property
-    def with_roi_head(self):
-        """bool: whether the detector has a RoI head"""
-        return hasattr(self, 'roi_head') and self.roi_head is not None
-
-    def init_weights(self, pretrained=None):
-        """Initialize the weights in detector.
-
-        Args:
-            pretrained (str, optional): Path to pre-trained weights.
-                Defaults to None.
-        """
-        super(TwoStageDetector, self).init_weights(pretrained)
-        self.backbone.init_weights(pretrained=pretrained)
-        if self.with_neck:
-            if isinstance(self.neck, nn.Sequential):
-                for m in self.neck:
-                    m.init_weights()
-            else:
-                self.neck.init_weights()
-        if self.with_rpn:
-            self.rpn_head.init_weights()
-        if self.with_roi_head:
-            self.roi_head.init_weights(pretrained)
-
-    def extract_feat(self, img):
-        """Directly extract features from the backbone+neck."""
-        x = self.backbone(img)
-        if self.with_neck:
-            x = self.neck(x)
-        return x
-
-    def forward_dummy(self, img):
-        """Used for computing network flops.
-
-        See `mmdetection/tools/get_flops.py`
-        """
-        outs = ()
-        # backbone
-        x = self.extract_feat(img)
-        # rpn
-        if self.with_rpn:
-            rpn_outs = self.rpn_head(x)
-            outs = outs + (rpn_outs, )
-        proposals = torch.randn(1000, 4).to(img.device)
-        # roi_head
-        roi_outs = self.roi_head.forward_dummy(x, proposals)
-        outs = outs + (roi_outs, )
-        return outs
+        self.dual_train = dual_train
+        self.dual_test = dual_test
+        # self.template_train = template_train
+        self.style = style
+        if self.style == 'sub_feat':
+            self.scale_a = Scale(0.5)
+            self.scale_b = Scale(0.5)
+        elif self.style == 'vector_add_feat':
+            self.scale_a = Scale_channel(1, 256)
+            self.scale_b = Scale_channel(1, 256)
 
     def forward_train(self,
                       img,
@@ -139,7 +80,7 @@ class TwoStageDetector(BaseDetector):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        x = self.extract_feat(img)
+        x = self.extract_feat_dual(img)
 
         losses = dict()
 
@@ -166,6 +107,55 @@ class TwoStageDetector(BaseDetector):
 
         return losses
 
+    def extract_feat_dual(self, img):
+        if self.dual_train is True and self.style is not None:
+
+            b, c, h, w = img.shape
+            img = img.reshape(-1, c // 2, h, w) #一张（1，6，x, x ）输入分成瑕疵图和模板图
+            if self.style == 'sub_img':
+                img = img[0::2, :, :, :] - img[1::2, :, :, :]
+                x = self.extract_feat(img)
+            elif self.style == 'add_img':
+                img = img[0::2, :, :, :] + img[1::2, :, :, :]
+                x = self.extract_feat(img)
+            elif self.style == 'sub_feat':
+                x = self.extract_feat(img)
+                x_ = []
+
+                for i, lvl_feat in enumerate(x):
+                    x_.append(self.scale_a(lvl_feat[0::2, :, :, :]) + self.scale_b(lvl_feat[1::2, :, :, :])) #瑕疵图和模板图融合
+                x = tuple(x_)
+            elif self.style == 'add_feat':
+                x = self.extract_feat(img)
+                x_ = []
+                for lvl_feat in x:
+                    x_.append(lvl_feat[0::2, :, :, :] + lvl_feat[1::2, :, :, :])
+                x = tuple(x_)
+            elif self.style == 'vector_add_feat':
+                x = self.extract_feat(img)
+                x_ = []
+                for i, lvl_feat in enumerate(x):
+                    x_.append(self.scale_a(lvl_feat[0::2, :, :, :]) + self.scale_b(lvl_feat[1::2, :, :, :]))
+                x = tuple(x_)
+        else:
+            x = self.extract_feat(img)
+
+        return x
+
+    #base.py
+    def extract_feats_dual(self, imgs):
+        """Extract features from multiple images.
+
+        Args:
+            imgs (list[torch.Tensor]): A list of images. The images are
+                augmented from the same image but in different ways.
+
+        Returns:
+            list[torch.Tensor]: Features of different images
+        """
+        assert isinstance(imgs, list)
+        return [self.extract_feat_dual(img) for img in imgs]
+
     async def async_simple_test(self,
                                 img,
                                 img_meta,
@@ -173,7 +163,11 @@ class TwoStageDetector(BaseDetector):
                                 rescale=False):
         """Async test without augmentation."""
         assert self.with_bbox, 'Bbox head must be implemented.'
-        x = self.extract_feat(img)
+
+        if self.dual_test:
+            x = self.extract_feat_dual(img)
+        else:
+            x = self.extract_feat(img)
 
         if proposals is None:
             proposal_list = await self.rpn_head.async_simple_test_rpn(
@@ -184,14 +178,17 @@ class TwoStageDetector(BaseDetector):
         return await self.roi_head.async_simple_test(
             x, proposal_list, img_meta, rescale=rescale)
 
-    def simple_test(self, img, img_metas, proposals=None, rescale=False):  # clw note: test.py 进这里
+    def simple_test(self, img, img_metas, proposals=None, rescale=False):
         """Test without augmentation."""
         assert self.with_bbox, 'Bbox head must be implemented.'
 
-        x = self.extract_feat(img)  # 5 tensor: (1, 256, h/8, w/8), (1, 256, h/16, w/16)... (1, 256, h/128, w/128)
+        if self.dual_test:
+            x = self.extract_feat_dual(img)
+        else:
+            x = self.extract_feat(img)
 
         if proposals is None:
-            proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)  # clw note: (1000, 5)
+            proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)
         else:
             proposal_list = proposals
 
@@ -204,7 +201,12 @@ class TwoStageDetector(BaseDetector):
         If rescale is False, then returned bboxes and masks will fit the scale
         of imgs[0].
         """
-        x = self.extract_feats(imgs)
+        if self.dual_test:
+            x = self.extract_feats_dual(imgs)
+        else:
+            x = self.extract_feats(imgs)
         proposal_list = self.rpn_head.aug_test_rpn(x, img_metas)
         return self.roi_head.aug_test(
             x, proposal_list, img_metas, rescale=rescale)
+
+

@@ -111,7 +111,9 @@ class TileDataset(CustomDataset):
             x1, y1, w, h = ann['bbox']
             if ann['area'] <= 0 or w < 1 or h < 1:
                 continue
-            bbox = [x1, y1, x1 + w - 1, y1 + h - 1]
+            if ann['category_id'] not in self.cat_ids:
+                continue
+            bbox = [x1, y1, x1 + w, y1 + h]
             if ann.get('iscrowd', False):
                 gt_bboxes_ignore.append(bbox)
             else:

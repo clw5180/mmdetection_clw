@@ -26,10 +26,14 @@ from .vfnet import VFNet
 from .yolact import YOLACT
 from .yolo import YOLOV3
 
+from .dual_faster_rcnn import DualFasterRCNN  # clw modify
+from .dual_cascade_rcnn import DualCascadeRCNN
+
 __all__ = [
     'ATSS', 'BaseDetector', 'SingleStageDetector', 'TwoStageDetector', 'RPN',
     'FastRCNN', 'FasterRCNN', 'MaskRCNN', 'CascadeRCNN', 'HybridTaskCascade',
     'RetinaNet', 'FCOS', 'GridRCNN', 'MaskScoringRCNN', 'RepPointsDetector',
     'FOVEA', 'FSAF', 'NASFCOS', 'PointRend', 'GFL', 'CornerNet', 'PAA',
     'YOLOV3', 'YOLACT', 'VFNet', 'DETR', 'TridentFasterRCNN'
+    ,'DualFasterRCNN', 'DualCascadeRCNN'
 ]

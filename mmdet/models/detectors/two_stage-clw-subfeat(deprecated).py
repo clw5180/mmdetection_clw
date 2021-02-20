@@ -5,6 +5,9 @@ import torch.nn as nn
 from ..builder import DETECTORS, build_backbone, build_head, build_neck
 from .base import BaseDetector
 
+from mmdet.models.utils import Scale, Scale_channel
+
+USE_SUB_FEATURE=True  # clw modify
 
 @DETECTORS.register_module()
 class TwoStageDetector(BaseDetector):
@@ -47,6 +50,15 @@ class TwoStageDetector(BaseDetector):
 
         self.init_weights(pretrained=pretrained)
 
+        #self.style = 'vector_add_feat'
+        self.style = 'sub_feat'
+        if self.style == 'sub_feat':
+            self.scale_a = Scale(0.5)
+            self.scale_b = Scale(0.5)
+        elif self.style == 'vector_add_feat':
+            self.scale_a = Scale_channel(1, 256)
+            self.scale_b = Scale_channel(1, 256)
+
     @property
     def with_rpn(self):
         """bool: whether the detector has RPN"""
@@ -82,7 +94,54 @@ class TwoStageDetector(BaseDetector):
         x = self.backbone(img)
         if self.with_neck:
             x = self.neck(x)
+        return x  # clw note: x: ((8, 256, h/4, w/4), (), (), (),  (8, 256, h/64, w/64))
+
+    def extract_feat_pair(self, img):
+        if self.style is not None:
+            b, c, h, w = img.shape  # bs, 6, h, w
+            img = img.reshape(-1, c // 2, h, w)  # 4,6,1536,1536-> 8,3,1536,1536
+            # img: 2*b, c, h, w
+            ### clw note: reshape makes pair img's feature in adjacent lines
+            # array([[1, 2, 3, 4],
+            #        [5, 6, 7, 8]])
+            # >> > b = a.reshape(-1, 2)
+            # >> > b
+            # array([[1, 2],
+            #        [3, 4],
+            #        [5, 6],
+            #        [7, 8]])
+            ###
+
+            if self.style == 'sub_img':
+                img = img[0::2, :, :, :] - img[1::2, :, :, :]
+                x = self.extract_feat(img)
+            elif self.style == 'add_img':
+                img = img[0::2, :, :, :] + img[1::2, :, :, :]
+                x = self.extract_feat(img)
+            elif self.style == 'sub_feat':
+                x = self.extract_feat(img)
+                x_ = []
+
+                for i, lvl_feat in enumerate(x):
+                    x_.append(self.scale_a(lvl_feat[0::2, :, :, :]) + self.scale_b(lvl_feat[1::2, :, :, :]))
+                x = tuple(x_)
+            elif self.style == 'add_feat':
+                x = self.extract_feat(img)
+                x_ = []
+                for lvl_feat in x:
+                    x_.append(lvl_feat[0::2, :, :, :] + lvl_feat[1::2, :, :, :])
+                x = tuple(x_)
+            elif self.style == 'vector_add_feat':
+                x = self.extract_feat(img)
+                x_ = []
+                for i, lvl_feat in enumerate(x):
+                    x_.append(self.scale_a(lvl_feat[0::2, :, :, :]) + self.scale_b(lvl_feat[1::2, :, :, :]))
+                x = tuple(x_)
+        else:
+            x = self.extract_feat(img)
+
         return x
+
 
     def forward_dummy(self, img):
         """Used for computing network flops.
@@ -139,15 +198,19 @@ class TwoStageDetector(BaseDetector):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        x = self.extract_feat(img)
 
+        if USE_SUB_FEATURE:
+            x = self.extract_feat_pair(img)   # clw note: fpn result ((bs, 256, h/4, w/4), (bs, 256, h/8, w/8), .... (bs, 256, h/64, w/64))
+        else:
+            x = self.extract_feat(img)
+        #x : tuple,5 layer
         losses = dict()
 
         # RPN forward and loss
         if self.with_rpn:
             proposal_cfg = self.train_cfg.get('rpn_proposal',
                                               self.test_cfg.rpn)
-            rpn_losses, proposal_list = self.rpn_head.forward_train(
+            rpn_losses, proposal_list = self.rpn_head.forward_train(  # clw note: [(1000, 5), (1000, 5)..... (1000, 5) ] total num is bs
                 x,
                 img_metas,
                 gt_bboxes,
@@ -188,7 +251,11 @@ class TwoStageDetector(BaseDetector):
         """Test without augmentation."""
         assert self.with_bbox, 'Bbox head must be implemented.'
 
-        x = self.extract_feat(img)  # 5 tensor: (1, 256, h/8, w/8), (1, 256, h/16, w/16)... (1, 256, h/128, w/128)
+
+        if USE_SUB_FEATURE:
+            x = self.extract_feat_pair(img)  # clw modify
+        else:
+            x = self.extract_feat(img)  # 5 tensor: (1, 256, h/8, w/8), (1, 256, h/16, w/16)... (1, 256, h/128, w/128)
 
         if proposals is None:
             proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)  # clw note: (1000, 5)

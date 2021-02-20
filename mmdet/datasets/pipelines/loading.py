@@ -384,10 +384,11 @@ class LoadAnnotations(object):
         return repr_str
 
 
-from skimage import img_as_ubyte
+
 import copy
 import random
 import cv2
+import os
 @PIPELINES.register_module()
 class LoadMosaicImageAndAnnotations(object):
     def __init__(self, to_float32=False,
@@ -404,7 +405,8 @@ class LoadMosaicImageAndAnnotations(object):
                  v_gain=0.36,
                  skip_box_w=0,
                  skip_box_h=0,
-                 image_shape=[1024, 1024]
+                 image_shape=[1024, 1024],
+                 template_path = None
                  ):
         self.to_float32 = to_float32
         self.color_type = color_type
@@ -422,12 +424,15 @@ class LoadMosaicImageAndAnnotations(object):
         self.skip_box_w = skip_box_w
         self.skip_box_h = skip_box_h
         self.image_shape = image_shape
+        self.template_path = template_path
 
     def __call__(self, results):
         if len(results) == 1:
             results = self._load_image_annotations(results, 0)
-        if len(results) == 4:
+        elif len(results) == 4:
             results = self._load_mosaic_image_and_annotations(results)
+        else:
+            assert False
         return results
 
     def _crop_patch(self, img, gt_bboxes, gt_labels, crop_size):
@@ -485,6 +490,65 @@ class LoadMosaicImageAndAnnotations(object):
 
         return patch, gt_bboxes, gt_labels
 
+
+    def _crop_patch_with_template(self, img, img_t, gt_bboxes, gt_labels, crop_size):
+
+        H, W, C = img.shape
+        px, py = crop_size  # 要切的patch的尺寸
+
+        if px > W or py > H:  # 如果要切的patch比图像本身还大, 那就只能pad原图了, 见下；
+            pad_w, pad_h = 0, 0
+
+            if px > W:
+                pad_w = px - W
+                W = px
+            if py > H:
+                pad_h = py - H
+                H = py
+
+            img = cv2.copyMakeBorder(img, 0, int(pad_h), 0, int(pad_w), cv2.BORDER_CONSTANT, 0)
+            img_t = cv2.copyMakeBorder(img_t, 0, int(pad_h), 0, int(pad_w), cv2.BORDER_CONSTANT, 0)
+
+        obj_num = gt_bboxes.shape[0]
+        select_gt_id = np.random.randint(0, obj_num)  # 随机选择一个gt，准备在它四周切下一个patch
+        x1, y1, x2, y2 = gt_bboxes[select_gt_id, :]  # 选的某个gt，拿到它的 xyxy
+
+        if x2 - x1 > px:  # clw note: 如果bbox的宽度比要切的patch的宽度还宽
+            nx = np.random.randint(x1, x2 - px + 1)  # 就切一部分
+        else:  # clw note: 一般都是进这里
+            nx = np.random.randint(max(x2 - px, 0),
+                                   min(x1 + 1, W - px + 1))  # 个人感觉是不是 x1-1合适一些？甚至留一点边缘，那就是x1-border？ TODO
+
+        if y2 - y1 > py:
+            ny = np.random.randint(y1, y2 - py + 1)
+        else:
+            ny = np.random.randint(max(y2 - py, 0), min(y1 + 1, H - py + 1))
+
+        patch_coord = np.zeros((1, 4), dtype="int")
+        patch_coord[0, 0] = nx
+        patch_coord[0, 1] = ny
+        patch_coord[0, 2] = nx + px
+        patch_coord[0, 3] = ny + py
+
+        # index = self._compute_overlap(patch_coord, gt_bboxes, 0.5)
+        index = self._compute_overlap(patch_coord, gt_bboxes, 0.7)  # clw modify
+        index = np.squeeze(index, axis=0)
+        index[select_gt_id] = True  # 这里貌似写不写TRue都行，因为上面计算overlap，patch和内部的gt的overlap一定是1
+
+        patch = img[ny: ny + py, nx: nx + px, :]
+        patch_t = img_t[ny: ny + py, nx: nx + px, :]
+        gt_bboxes = gt_bboxes[index, :]
+        gt_labels = gt_labels[index]
+
+        gt_bboxes[:, 0] = np.maximum(gt_bboxes[:, 0] - patch_coord[0, 0], 0)  # 如果patch左边缘在gt左边缘的右边，那么这里就会算出负数，所以限制到0
+        gt_bboxes[:, 1] = np.maximum(gt_bboxes[:, 1] - patch_coord[0, 1], 0)
+        gt_bboxes[:, 2] = np.minimum(gt_bboxes[:, 2] - patch_coord[0, 0],
+                                     px - 1)  # 如果patch右边缘在gt右边缘左边，那么这里算出来的值就会比patch宽度还大，因此要限制到patch宽度
+        gt_bboxes[:, 3] = np.minimum(gt_bboxes[:, 3] - patch_coord[0, 1], py - 1)
+
+        return patch, patch_t, gt_bboxes, gt_labels
+
+
     def _compute_overlap(self, a, b, over_threshold=0.5):
         """
         Parameters
@@ -527,11 +591,17 @@ class LoadMosaicImageAndAnnotations(object):
         #xc, yc = [int(random.uniform(imsize * 0.25, imsize * 0.75)) for _ in range(2)]  # center x, y
         xc, yc = [int(random.uniform(imsize * 0.4, imsize * 0.6)) for _ in range(2)]  # clw modify
         result_image = np.full((imsize, imsize, 3), 0, dtype=np.float32)  # large image, will be composed by 4 small images
+        result_image_t = np.full((imsize, imsize, 3), 0, dtype=np.float32)  # clw added
+
 
         for i, index in enumerate(indexes):
-            result = self._load_image_annotations(results_c, index)
-            #print(result.keys())
+            if self.template_path is None:
+                result = self._load_image_annotations(results_c, index)
+            else:
+                result = self._load_image_annotations_with_template(results_c, index)
+                img_t = result['img_t'].astype(np.float32)
             img = result['img'].astype(np.float32)
+            #print(result.keys())
             ws, hs = img.shape[:2]  # clw note: small image
 
             gt_bboxes = result['gt_bboxes']
@@ -546,7 +616,14 @@ class LoadMosaicImageAndAnnotations(object):
                 x1a, y1a, x2a, y2a = max(xc - ws, 0), yc, xc, min(s * 2, yc + hs)
             elif i == 3:  # bottom right
                 x1a, y1a, x2a, y2a = xc, yc, min(xc + ws, s * 2), min(s * 2, yc + hs)
-            img_cropped, gt_bboxes_cropped, gt_labels_cropped = self._crop_patch(img, gt_bboxes, gt_labels, (x2a-x1a, y2a-y1a))
+
+            if self.template_path is None:
+                img_cropped, gt_bboxes_cropped, gt_labels_cropped = self._crop_patch(img, gt_bboxes, gt_labels, (x2a-x1a, y2a-y1a))
+            else:
+                img_cropped, img_cropped_t, gt_bboxes_cropped, gt_labels_cropped = self._crop_patch_with_template(
+                    img, img_t, gt_bboxes, gt_labels, (x2a-x1a, y2a-y1a))
+                result_image_t[y1a:y2a, x1a:x2a, :] = img_cropped_t
+            result_image[y1a:y2a, x1a:x2a, :] = img_cropped
 
             # x1b = int(random.uniform(0, w - (x2a - x1a)))
             # y1b = int(random.uniform(0, h - (y2a - y1a)))
@@ -557,7 +634,7 @@ class LoadMosaicImageAndAnnotations(object):
             # result_image[y1a:y2a, x1a:x2a, :] = image[y1b:y2b, x1b:x2b, :]
             # print('result img:', result_image.shape, y1a,y2a, x1a,x2a, 'cut img:',  image.shape, y1b,y2b,  x1b,x2b) # for debug
 
-            result_image[y1a:y2a, x1a:x2a, :] = img_cropped
+
             if i == 0:
                 pass
             elif i == 1:  # top right
@@ -625,6 +702,11 @@ class LoadMosaicImageAndAnnotations(object):
         if self.hsv_aug:
             augment_hsv(img=result_image, hgain=self.h_gain, sgain=self.s_gain, vgain=self.v_gain)
         results['img'] = result_image
+        if self.template_path is not None:
+            results['img_t'] = result_image_t
+            results['img_fields'] = ['img', 'img_t']
+        else:
+            results['img_fields'] = ['img']
         results['img_shape'] = result_image.shape
         results['ori_shape'] = result_image.shape
         # Set initial values for default meta_keys
@@ -635,7 +717,7 @@ class LoadMosaicImageAndAnnotations(object):
             mean=np.zeros(num_channels, dtype=np.float32),
             std=np.ones(num_channels, dtype=np.float32),
             to_rgb=False)
-        results['img_fields'] = ['img']
+
 
         if self.with_bbox:
             results = self._load_bboxes(results)
@@ -690,7 +772,58 @@ class LoadMosaicImageAndAnnotations(object):
             results = self._load_masks(results)
         if self.with_seg:
             results = self._load_semantic_seg(results)
+        return results
 
+
+    def _load_image_annotations_with_template(self, results, k):
+        results = results[k]
+        if self.file_client is None:
+            self.file_client = mmcv.FileClient(**self.file_client_args)
+        if results['img_prefix'] is not None:
+            filename = osp.join(results['img_prefix'],
+                                results['img_info']['filename'])
+        else:
+            filename = results['img_info']['filename']
+
+        img_bytes = self.file_client.get(filename)
+        img = mmcv.imfrombytes(img_bytes, flag=self.color_type)
+        template_filename = os.path.join(self.template_path, filename.split('/')[-1][:-4] + '_t.jpg')
+        template_img_bytes = self.file_client.get(template_filename)
+        img_t = mmcv.imfrombytes(template_img_bytes, flag=self.color_type)
+
+        if self.to_float32:
+            img = img.astype(np.float32)
+            img_t = img_t.astype(np.float32)
+
+        results['filename'] = filename
+        results['ori_filename'] = results['img_info']['filename']
+        results['img'] = img
+        results['img_t'] = img_t
+        results['concat'] = True
+        results['img_fields'] = ['img', 'img_t']
+
+        results['img_shape'] = img.shape
+        results['ori_shape'] = img.shape
+        # Set initial values for default meta_keys
+        results['pad_shape'] = img.shape
+        results['scale_factor'] = 1.0
+        num_channels = 1 if len(img.shape) < 3 else img.shape[2]
+        results['img_norm_cfg'] = dict(
+            mean=np.zeros(num_channels, dtype=np.float32),
+            std=np.ones(num_channels, dtype=np.float32),
+            to_rgb=False)
+        results['img_fields'] = ['img']
+
+        if self.with_bbox:
+            results = self._load_bboxes(results)
+            if results is None:
+                return None
+        if self.with_label:
+            results = self._load_labels(results)
+        if self.with_mask:
+            results = self._load_masks(results)
+        if self.with_seg:
+            results = self._load_semantic_seg(results)
         return results
 
     def _load_bboxes(self, results):
