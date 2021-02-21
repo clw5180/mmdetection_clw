@@ -450,7 +450,7 @@ class LoadMosaicImageAndAnnotations(object):
                 pad_h = py - H
                 H = py
 
-            img = cv2.copyMakeBorder(img, 0, int(pad_h), 0, int(pad_w), cv2.BORDER_CONSTANT, 0)
+            img = cv2.copyMakeBorder(img, 0, int(pad_h), 0, int(pad_w), cv2.BORDER_CONSTANT, 0)  # top, bottom, left, right ：相应方向上的边框宽度
 
         obj_num = gt_bboxes.shape[0]
         select_gt_id = np.random.randint(0, obj_num)  # 随机选择一个gt，准备在它四周切下一个patch
@@ -460,7 +460,7 @@ class LoadMosaicImageAndAnnotations(object):
             nx = np.random.randint(x1, x2 - px + 1)  # 就切一部分
         else:  # clw note: 一般都是进这里
             nx = np.random.randint(max(x2 - px, 0),
-                                   min(x1 + 1, W - px + 1))  # 个人感觉是不是 x1-1合适一些？甚至留一点边缘，那就是x1-border？ TODO
+                                   min(x1 + 1, W - px + 1))
 
         if y2 - y1 > py:
             ny = np.random.randint(y1, y2 - py + 1)
@@ -602,7 +602,7 @@ class LoadMosaicImageAndAnnotations(object):
                 img_t = result['img_t'].astype(np.float32)
             img = result['img'].astype(np.float32)
             #print(result.keys())
-            ws, hs = img.shape[:2]  # clw note: small image
+            hs, ws = img.shape[:2]  # clw note: small image
 
             gt_bboxes = result['gt_bboxes']
             gt_labels = result['gt_labels']
@@ -635,15 +635,21 @@ class LoadMosaicImageAndAnnotations(object):
             # print('result img:', result_image.shape, y1a,y2a, x1a,x2a, 'cut img:',  image.shape, y1b,y2b,  x1b,x2b) # for debug
 
 
-            if i == 0:
-                pass
-            elif i == 1:  # top right
-                gt_bboxes_cropped[:, 0::2] += xc
-            elif i == 2:  # bottom left
-                gt_bboxes_cropped[:, 1::2] += yc
-            elif i == 3:  # bottom right
-                gt_bboxes_cropped[:, 0::2] += xc
-                gt_bboxes_cropped[:, 1::2] += yc
+            # if i == 0:
+            #     pass
+            # elif i == 1:  # top right
+            #     #gt_bboxes_cropped[:, 0::2] += xc
+            #     gt_bboxes_cropped[:, 0::2] += x1a
+            # elif i == 2:  # bottom left
+            #     #gt_bboxes_cropped[:, 1::2] += yc
+            #     gt_bboxes_cropped[:, 1::2] += y1a
+            # elif i == 3:  # bottom right
+            #     #gt_bboxes_cropped[:, 0::2] += xc
+            #     gt_bboxes_cropped[:, 0::2] += x1a
+            #     #gt_bboxes_cropped[:, 1::2] += yc
+            #     gt_bboxes_cropped[:, 1::2] += y1a
+            gt_bboxes_cropped[:, 0::2] += x1a
+            gt_bboxes_cropped[:, 1::2] += y1a
 
             # clean bbox out of region   TODO: this version is coarse
             # mask = (boxes[:, 2] > x1a) & (boxes[:, 0] < x2a) & (boxes[:, 3] > y1a) & (boxes[:, 1] < y2a)  # filter the gt which is out of the cropped region of origin image
@@ -665,14 +671,16 @@ class LoadMosaicImageAndAnnotations(object):
         result_labels = np.concatenate(result_labels, 0)
         # results = self._load_image_boxes(results, 0)
 
-        ### 可视化确认结果无误
+        ## 可视化确认结果无误
         # filename = results['img_info']['file_name']
         # import cv2
         # img_out = result_image.copy()
         # for box in result_boxes:
         #     cv2.rectangle(img_out, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), thickness=3, lineType=cv2.LINE_AA)
         # cv2.imwrite('/home/user/' + filename, img_out )
-        ###
+        # if self.template_path is not None:
+        #     cv2.imwrite('/home/user/' + filename.split('.')[0] + '_t.jpg', result_image_t)
+        ##
 
         results['ann_info']['bboxes'] = result_boxes
         results['ann_info']['labels'] = result_labels
@@ -775,7 +783,7 @@ class LoadMosaicImageAndAnnotations(object):
         return results
 
 
-    def _load_image_annotations_with_template(self, results, k):
+    def _load_image_annotations_with_template(self, results, k):   # clw modify
         results = results[k]
         if self.file_client is None:
             self.file_client = mmcv.FileClient(**self.file_client_args)
