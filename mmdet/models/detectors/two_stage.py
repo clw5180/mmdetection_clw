@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 # from mmdet.core import bbox2result, bbox2roi, build_assigner, build_sampler
 from ..builder import DETECTORS, build_backbone, build_head, build_neck
@@ -78,8 +79,9 @@ class TwoStageDetector(BaseDetector):
             self.roi_head.init_weights(pretrained)
 
     def extract_feat(self, img):
+        # img = F.max_pool2d(img, kernel_size=5, stride=1, padding=2)  # clw modify
         """Directly extract features from the backbone+neck."""
-        x = self.backbone(img)
+        x = self.backbone(img)  # img: tensor (bs, c, h, w)
         if self.with_neck:
             x = self.neck(x)
         return x

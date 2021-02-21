@@ -10,7 +10,8 @@ from .loading import (LoadAnnotations, LoadImageFromFile, LoadImageFromWebcam,
 from .test_time_aug import MultiScaleFlipAug
 from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, Normalize,
                          Pad, PhotoMetricDistortion, RandomCenterCropPad,
-                         RandomCrop, RandomFlip, Resize, SegRescale)
+                         RandomCrop, RandomFlip, Resize, SegRescale,
+                         Mixup)  #  clw modify
 
 from .concat import Concat
 from .concat_6channel import Concat6
@@ -28,5 +29,5 @@ __all__ = [
     'Rotate', 'ColorTransform', 'EqualizeTransform', 'BrightnessTransform',
     'ContrastTransform', 'Translate'
     ,'Concat', 'Concat6', 'LoadMosaicImageAndAnnotations' # clw modify
-    ,'ConcatTemplate', 'LoadTemplate'
+    ,'ConcatTemplate', 'LoadTemplate', 'Mixup'
 ]

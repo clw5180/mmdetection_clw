@@ -2116,3 +2116,96 @@ class BboxesJitter(object):
         repr_str = self.__class__.__name__
         repr_str += "(shift_ratio={})".format(self.shift_ratio)
         return repr_str
+
+
+import os
+import json
+@PIPELINES.register_module()
+class Mixup(object):   # clw note: refer to https://github.com/Wakinguup/Underwater_detection/blob/c3d971046cb7d8f6ec8213e9d9fc29c5f28f8412/code/mmdet/datasets/pipelines/transforms.py
+    """Mixup images & bbox
+    Args:
+        prob (float): the probability of carrying out mixup process.
+        lambd (float): the parameter for mixup.
+        json_path (string): the path to dataset json file.
+    """
+
+    def __init__(self, prob=0.5,
+                 json_path='data/coco/annotations/pgtrainval2017.json',
+                 img_path='data/coco/images/'):
+        #self.lambd = np.random.beta(1.5, 1.5)  # clw note: the paper use this value, but the loss need to be weighted !!!
+        self.lambd = 0.5
+        self.prob = prob
+        self.json_path = json_path
+        self.img_path = img_path
+        with open(json_path, 'r') as json_file:
+            all_labels = json.load(json_file)
+        self.all_labels = all_labels
+
+    def get_img2(self):
+        # random get image2 for mixup
+        idx2 = np.random.choice(np.arange(len(self.all_labels['images'])))
+        img2_fn = self.all_labels['images'][idx2]['file_name']
+        img2_id = self.all_labels['images'][idx2]['id']
+        img2_path = os.path.join(self.img_path , img2_fn)
+        img2 = cv2.imread(img2_path)
+
+        # get image2 label
+        labels2 = []
+        boxes2 = []
+        for annt in self.all_labels['annotations']:  # clw note: can call coco api to get the corresponding ann   TODO
+            if annt['image_id'] == img2_id:
+                labels2.append(np.int64(annt['category_id']))
+                boxes2.append([np.float32(annt['bbox'][0]),
+                               np.float32(annt['bbox'][1]),
+                               np.float32(annt['bbox'][0] + annt['bbox'][2] - 1),  # clw note: -1 or not,  TODO
+                               np.float32(annt['bbox'][1] + annt['bbox'][3] - 1)])
+        return img2, labels2, boxes2
+
+    def __call__(self, results):
+        if random.uniform(0, 1) < self.prob:
+            img1 = results['img']
+            labels1 = results['gt_labels']
+
+            img2, labels2, boxes2 = self.get_img2()
+            # if labels2 != []:
+            #     break
+
+            height = max(img1.shape[0], img2.shape[0])
+            width = max(img1.shape[1], img2.shape[1])
+
+            if labels2 == []:  # clw note: sample 2 is pure negative sample
+                self.lambd = 0.9  # float(round(random.uniform(0.5,0.9),1))
+                # mix image
+                mixup_image = np.zeros([height, width, 3], dtype='float32')
+                mixup_image[:img1.shape[0], :img1.shape[1], :] = img1.astype('float32') * self.lambd
+                mixup_image[:img2.shape[0], :img2.shape[1], :] += img2.astype('float32') * (1. - self.lambd)
+                mixup_image = mixup_image.astype('uint8')
+            else:
+                # mix image
+                mixup_image = np.zeros([height, width, 3], dtype='float32')
+                mixup_image[:img1.shape[0], :img1.shape[1], :] = img1.astype('float32') * self.lambd
+                mixup_image[:img2.shape[0], :img2.shape[1], :] += img2.astype('float32') * (1. - self.lambd)
+                mixup_image = mixup_image.astype('uint8')
+
+                # mix labels
+                results['gt_labels'] = np.hstack((labels1, np.array(labels2)))
+                results['gt_bboxes'] = np.vstack((list(results['gt_bboxes']), boxes2))
+
+            results['img'] = mixup_image
+
+            # if the image2 has not bboxes, the 'gt_labels' and 'gt_bboxes' need to be doubled
+            # so at the end the half of loss weight can be added as 1 instead of 0.5
+            # if boxes2 == []:
+            #     results['gt_labels'] = np.hstack((labels1, labels1))
+            #     results['gt_bboxes'] = np.vstack((list(results['gt_bboxes']), list(results['gt_bboxes'])))
+            # else:
+
+            return results
+
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(prob={}, lambd={}, mixup={}, json_path={}, img_path={})'.format(self.prob,
+                                                                                                           self.lambd,
+                                                                                                           self.mixup,
+                                                                                                           self.json_path,
+                                                                                                           self.img_path)
