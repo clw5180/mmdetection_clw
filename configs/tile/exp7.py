@@ -13,19 +13,19 @@ model = dict(
         frozen_stages=1,
         in_channels=3,   # for top2 method: merge feature after fpn
 
+        ### clw modify
+        dcn=dict(type='DCN', deform_groups=1, fallback_on_stride=False),
+        stage_with_dcn=(False, True, True, True),  # c3-c5
+        ###
+
         norm_cfg=dict(type='BN', requires_grad=True),
         norm_eval=True,
         style='pytorch'),
     neck=dict(
-        type='BiFPN',
+        type='FPN',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
         num_outs=5),
-    # neck=dict(
-    #     type='FPN',
-    #     in_channels=[256, 512, 1024, 2048],
-    #     out_channels=256,
-    #     num_outs=5),
     rpn_head=dict(
         type='RPNHead',
         in_channels=256,
@@ -132,7 +132,7 @@ data = dict(
             dict(type='LoadImageFromFile'),
             dict(type='LoadAnnotations', with_bbox=True),
             #dict(type='Concat', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210204/train_template_imgs'),
-            #dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
+            dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
             #dict(type='GtBoxBasedCrop', crop_size=(1536, 1536)),  # clw modify
             #dict(type='Resize', img_scale=(1536, 1536), keep_ratio=True),
             dict(type='Resize', img_scale=(1024, 1024), keep_ratio=True),
@@ -153,7 +153,7 @@ data = dict(
         pipeline=[
             dict(type='LoadImageFromFile'),
             #dict(type='Concat', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210204/train_template_imgs'),
-            #dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
+            dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
             dict(
                 type='MultiScaleFlipAug',
                 #scale_factor=1.0,
@@ -180,7 +180,7 @@ data = dict(
         pipeline=[
             dict(type='LoadImageFromFile'),
             #dict(type='Concat', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210204/train_template_imgs'),
-            #dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
+            dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
             dict(
                 type='MultiScaleFlipAug',
                 #scale_factor=1.0,
@@ -221,5 +221,5 @@ load_from = '/home/user/.cache/torch/mmdetection/faster_rcnn_r50_fpn_2x_coco_bbo
 resume_from = None
 workflow = [('train', 1)]
 fp16 = dict(loss_scale=512.0)
-work_dir = './work_dirs/exp5'
+work_dir = './work_dirs/exp7'
 gpu_ids = range(0, 1)

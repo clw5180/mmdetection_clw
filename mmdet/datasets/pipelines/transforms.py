@@ -2141,13 +2141,19 @@ class Mixup(object):   # clw note: refer to https://github.com/Wakinguup/Underwa
             all_labels = json.load(json_file)
         self.all_labels = all_labels
 
-    def get_img2(self):
+    def get_img2(self, img1):
         # random get image2 for mixup
-        idx2 = np.random.choice(np.arange(len(self.all_labels['images'])))
+        idx2 = np.random.choice(np.arange(len(self.all_labels['images'])))  # clw note: except img1, TODO
         img2_fn = self.all_labels['images'][idx2]['file_name']
         img2_id = self.all_labels['images'][idx2]['id']
         img2_path = os.path.join(self.img_path , img2_fn)
         img2 = cv2.imread(img2_path)
+
+        ### clw modify: resize img2 and boxes2, as img1, so the size is same;
+        scale_w = img1.shape[1] / img2.shape[1]
+        scale_h = img1.shape[0] / img2.shape[0]
+        img2 = cv2.resize(img2, (img1.shape[1], img1.shape[0]))
+        ######################
 
         # get image2 label
         labels2 = []
@@ -2155,10 +2161,10 @@ class Mixup(object):   # clw note: refer to https://github.com/Wakinguup/Underwa
         for annt in self.all_labels['annotations']:  # clw note: can call coco api to get the corresponding ann   TODO
             if annt['image_id'] == img2_id:
                 labels2.append(np.int64(annt['category_id']))
-                boxes2.append([np.float32(annt['bbox'][0]),
-                               np.float32(annt['bbox'][1]),
-                               np.float32(annt['bbox'][0] + annt['bbox'][2] - 1),  # clw note: -1 or not,  TODO
-                               np.float32(annt['bbox'][1] + annt['bbox'][3] - 1)])
+                boxes2.append([np.float32(annt['bbox'][0] * scale_w),
+                               np.float32(annt['bbox'][1] * scale_h),
+                               np.float32((annt['bbox'][0] + annt['bbox'][2] - 1) * scale_w),  # clw note: -1 or not,  TODO
+                               np.float32((annt['bbox'][1] + annt['bbox'][3] - 1) * scale_h)])
         return img2, labels2, boxes2
 
     def __call__(self, results):
@@ -2166,10 +2172,12 @@ class Mixup(object):   # clw note: refer to https://github.com/Wakinguup/Underwa
             img1 = results['img']
             labels1 = results['gt_labels']
 
-            img2, labels2, boxes2 = self.get_img2()
+            img2, labels2, boxes2 = self.get_img2(img1)
             # if labels2 != []:
             #     break
 
+
+            ############################################
             height = max(img1.shape[0], img2.shape[0])
             width = max(img1.shape[1], img2.shape[1])
 

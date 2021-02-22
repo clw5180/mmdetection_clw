@@ -1,4 +1,5 @@
 model = dict(
+    #type='MaskRCNN',
     type='FasterRCNN',
     pretrained='torchvision://resnet50',
     backbone=dict(
@@ -17,23 +18,17 @@ model = dict(
         norm_eval=True,
         style='pytorch'),
     neck=dict(
-        type='BiFPN',
+        type='FPN',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
         num_outs=5),
-    # neck=dict(
-    #     type='FPN',
-    #     in_channels=[256, 512, 1024, 2048],
-    #     out_channels=256,
-    #     num_outs=5),
     rpn_head=dict(
         type='RPNHead',
         in_channels=256,
         feat_channels=256,
         anchor_generator=dict(
             type='AnchorGenerator',
-            #scales=[2],
-            scales=[1, 8],
+            scales=[1,8],
             ratios=[0.5, 1.0, 2.0],
             strides=[4, 8, 16, 32, 64]),
         bbox_coder=dict(
@@ -64,6 +59,20 @@ model = dict(
             loss_cls=dict(
                 type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
             loss_bbox=dict(type='L1Loss', loss_weight=1.0))),
+        # mask_roi_extractor=dict(
+        #     type='SingleRoIExtractor',
+        #     roi_layer=dict(type='RoIAlign', output_size=14, sampling_ratio=0),
+        #     out_channels=256,
+        #     featmap_strides=[4, 8, 16, 32]),
+        # mask_head=dict(
+        #     type='FCNMaskHead',
+        #     num_convs=4,
+        #     in_channels=256,
+        #     conv_out_channels=256,
+        #     num_classes=80,
+            # loss_mask=dict(
+            #     #type='CrossEntropyLoss', use_mask=True, loss_weight=1.0))),
+            #     type='CrossEntropyLoss', use_mask=False, loss_weight=1.0))), # clw modify
     train_cfg=dict(
         rpn=dict(
             assigner=dict(
@@ -103,6 +112,7 @@ model = dict(
                 pos_fraction=0.25,
                 neg_pos_ub=-1,
                 add_gt_as_proposals=True),
+            #mask_size=28,
             pos_weight=-1,
             debug=False)),
     test_cfg=dict(
@@ -117,6 +127,7 @@ model = dict(
             score_thr=0.001,
             nms=dict(type='nms', iou_threshold=0.1),
             max_per_img=100)))
+            #mask_thr_binary=0.5)))
 
 data = dict(
     samples_per_gpu=8,
@@ -124,17 +135,31 @@ data = dict(
     workers_per_gpu=6,
     train=dict(
         type='TileDataset',
+        #type='TileMosaicDataset',
         ann_file=
-        '/home/user/dataset/2021tianchi/tile_round2_train_20210208/train.json',
+        '/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_mask.json',
+        #'/home/user/dataset/2021tianchi/tile_round2_train_20210208/train--toy.json',
         img_prefix=
         '/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_imgs',
         pipeline=[
             dict(type='LoadImageFromFile'),
+            dict(
+                type='InstaBoost',
+                action_candidate=('normal', 'horizontal', 'skip'),
+                action_prob=(1, 0, 0),
+                scale=(0.8, 1.2),
+                dx=15,
+                dy=15,
+                theta=(-1, 1),
+                color_prob=0.5,
+                hflag=False,
+                aug_ratio=0.5),
             dict(type='LoadAnnotations', with_bbox=True),
-            #dict(type='Concat', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210204/train_template_imgs'),
-            #dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
-            #dict(type='GtBoxBasedCrop', crop_size=(1536, 1536)),  # clw modify
-            #dict(type='Resize', img_scale=(1536, 1536), keep_ratio=True),
+            # dict(type='Mixup', prob=1.0,
+            #     json_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train.json',
+            #     img_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_imgs'),
+            #dict(type='LoadMosaicImageAndAnnotations', with_bbox=True, with_mask=False, image_shape=[2048, 2048], hsv_aug=False, h_gain=0.014, s_gain=0.68, v_gain=0.36, skip_box_w=1, skip_box_h=1),
+            #dict(type='GtBoxBasedCrop', crop_size=(1024, 1024)),  # clw modify
             dict(type='Resize', img_scale=(1024, 1024), keep_ratio=True),
             dict(type='RandomFlip', flip_ratio=0.5),
             dict(
@@ -152,12 +177,9 @@ data = dict(
         img_prefix='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_imgs',
         pipeline=[
             dict(type='LoadImageFromFile'),
-            #dict(type='Concat', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210204/train_template_imgs'),
-            #dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
             dict(
                 type='MultiScaleFlipAug',
                 #scale_factor=1.0,
-                #img_scale=(1536, 1536),
                 img_scale=(1024, 1024),
                 flip=False,
                 transforms=[
@@ -179,12 +201,9 @@ data = dict(
         img_prefix='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_imgs',
         pipeline=[
             dict(type='LoadImageFromFile'),
-            #dict(type='Concat', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210204/train_template_imgs'),
-            #dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
             dict(
                 type='MultiScaleFlipAug',
                 #scale_factor=1.0,
-                #img_scale=(1536, 1536),
                 img_scale=(1024, 1024),
                 flip=False,
                 transforms=[
@@ -211,15 +230,19 @@ lr_config = dict(
     warmup_iters=500,
     warmup_ratio=0.001,
     step=[8, 11])
+    # step=[16, 23])
 total_epochs = 12
+# total_epochs = 24
 checkpoint_config = dict(interval=12)
 log_config = dict(interval=50, hooks=[dict(type='TextLoggerHook')])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 #load_from = '/home/user/.cache/torch/mmdetection/faster_rcnn_r50_fpn_2x_coco_bbox_mAP-0.384_20200504_210434-a5d8aa15_concat6.pth'
 load_from = '/home/user/.cache/torch/mmdetection/faster_rcnn_r50_fpn_2x_coco_bbox_mAP-0.384_20200504_210434-a5d8aa15.pth'
+#load_from = '/home/user/.cache/torch/mmdetection/mask_rcnn_r50_fpn_2x_coco_bbox_mAP-0.392__segm_mAP-0.354_20200505_003907-3e542a40.pth'
+#load_from = '/home/user/.cache/torch/mmdetection/r50-FPN-1x_classsampling_publish.pth'
 resume_from = None
 workflow = [('train', 1)]
 fp16 = dict(loss_scale=512.0)
-work_dir = './work_dirs/exp5'
+work_dir = './work_dirs/exp24'
 gpu_ids = range(0, 1)

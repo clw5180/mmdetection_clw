@@ -17,15 +17,10 @@ model = dict(
         norm_eval=True,
         style='pytorch'),
     neck=dict(
-        type='BiFPN',
+        type='FPN',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
         num_outs=5),
-    # neck=dict(
-    #     type='FPN',
-    #     in_channels=[256, 512, 1024, 2048],
-    #     out_channels=256,
-    #     num_outs=5),
     rpn_head=dict(
         type='RPNHead',
         in_channels=256,
@@ -51,7 +46,12 @@ model = dict(
             out_channels=256,
             featmap_strides=[4, 8, 16, 32]),
         bbox_head=dict(
-            type='Shared2FCBBoxHead',
+            #type='Shared2FCBBoxHead',
+            type="TSDSharedFCBBoxHead",
+            num_fcs=2,
+            featmap_strides=[4, 8, 16, 32],
+            cls_pc_margin=0.3,
+            loc_pc_margin=0.3,
             in_channels=256,
             fc_out_channels=1024,
             roi_feat_size=7,
@@ -126,6 +126,7 @@ data = dict(
         type='TileDataset',
         ann_file=
         '/home/user/dataset/2021tianchi/tile_round2_train_20210208/train.json',
+        #'/home/user/dataset/2021tianchi/tile_round2_train_20210208/train--toy.json',
         img_prefix=
         '/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_imgs',
         pipeline=[
@@ -217,9 +218,10 @@ log_config = dict(interval=50, hooks=[dict(type='TextLoggerHook')])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 #load_from = '/home/user/.cache/torch/mmdetection/faster_rcnn_r50_fpn_2x_coco_bbox_mAP-0.384_20200504_210434-a5d8aa15_concat6.pth'
-load_from = '/home/user/.cache/torch/mmdetection/faster_rcnn_r50_fpn_2x_coco_bbox_mAP-0.384_20200504_210434-a5d8aa15.pth'
+#load_from = '/home/user/.cache/torch/mmdetection/faster_rcnn_r50_fpn_2x_coco_bbox_mAP-0.384_20200504_210434-a5d8aa15.pth'
+load_from = '/home/user/.cache/torch/mmdetection/r50-FPN-1x_classsampling_TSD_publish.pth'
 resume_from = None
 workflow = [('train', 1)]
 fp16 = dict(loss_scale=512.0)
-work_dir = './work_dirs/exp5'
+work_dir = './work_dirs/exp11'
 gpu_ids = range(0, 1)

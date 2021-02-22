@@ -2,6 +2,29 @@ model = dict(
     type='FasterRCNN',
     pretrained='torchvision://resnet50',
     backbone=dict(
+        plugins=[
+            dict(
+                cfg=dict(
+                    type='GeneralizedAttention',
+                    spatial_range=-1,
+                    num_heads=8,
+                    attention_type='1111',
+                    kv_stride=2),
+                stages=(False, False, True, True),
+                position='after_conv2')
+        ],
+        # plugins=[
+        #         dict(
+        #             cfg=dict(
+        #                 type='GeneralizedAttention',
+        #                 spatial_range=-1,
+        #                 num_heads=8,
+        #                 attention_type='0010',
+        #                 kv_stride=2),
+        #             stages=(False, False, True, True),
+        #             position='after_conv2')
+        #     ],
+
         type='ResNet',
         depth=50,
         num_stages=4,
@@ -17,15 +40,10 @@ model = dict(
         norm_eval=True,
         style='pytorch'),
     neck=dict(
-        type='BiFPN',
+        type='FPN',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
         num_outs=5),
-    # neck=dict(
-    #     type='FPN',
-    #     in_channels=[256, 512, 1024, 2048],
-    #     out_channels=256,
-    #     num_outs=5),
     rpn_head=dict(
         type='RPNHead',
         in_channels=256,
@@ -119,8 +137,9 @@ model = dict(
             max_per_img=100)))
 
 data = dict(
-    samples_per_gpu=8,
+    #samples_per_gpu=8,
     #samples_per_gpu=4,
+    samples_per_gpu=2,
     workers_per_gpu=6,
     train=dict(
         type='TileDataset',
@@ -202,8 +221,9 @@ data = dict(
         ]))
 #evaluation = dict(interval=1, metric='bbox')
 evaluation = dict(interval=1, metric=['mAP','bbox'])
-optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+#optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
 #optimizer = dict(type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=0.0025, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=None)
 lr_config = dict(
     policy='step',
@@ -217,9 +237,10 @@ log_config = dict(interval=50, hooks=[dict(type='TextLoggerHook')])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 #load_from = '/home/user/.cache/torch/mmdetection/faster_rcnn_r50_fpn_2x_coco_bbox_mAP-0.384_20200504_210434-a5d8aa15_concat6.pth'
-load_from = '/home/user/.cache/torch/mmdetection/faster_rcnn_r50_fpn_2x_coco_bbox_mAP-0.384_20200504_210434-a5d8aa15.pth'
+#load_from = '/home/user/.cache/torch/mmdetection/faster_rcnn_r50_fpn_2x_coco_bbox_mAP-0.384_20200504_210434-a5d8aa15.pth'
+load_from = '/home/user/.cache/torch/mmdetection/faster_rcnn_r50_fpn_attention_1111_1x_coco_20200130-403cccba.pth'
 resume_from = None
 workflow = [('train', 1)]
-fp16 = dict(loss_scale=512.0)
-work_dir = './work_dirs/exp5'
+#fp16 = dict(loss_scale=512.0)
+work_dir = './work_dirs/exp6'
 gpu_ids = range(0, 1)
