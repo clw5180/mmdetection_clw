@@ -80,6 +80,8 @@ class InstaBoost(object):
         img = results['img']
         orig_type = img.dtype
         anns = self._load_anns(results)
+        aaa = len(anns)
+        bbb = anns.copy()
         if np.random.choice([0, 1], p=[1 - self.aug_ratio, self.aug_ratio]):
             try:
                 import instaboostfast as instaboost
@@ -88,6 +90,19 @@ class InstaBoost(object):
                                   'to install instaboostfast first.')
             anns, img = instaboost.get_new_data(
                 anns, img.astype(np.uint8), self.cfg, background=None)
+
+        ####################
+        #if len(anns) != aaa:
+        #ccc = len(results['ann_info']['bboxes'])
+        # if len(results['ann_info']['bboxes'])==0:
+            # print(results['img_info'])
+            # for ann in anns:
+            #     print(ann['bbox'])  # clw modify
+            # print()
+            # for ann in bbb:
+            #     print(ann['bbox'])
+            # results['ann_info']['bboxes'] = np.empty([0, 4], dtype=np.float32)  # clw modify: fix bug of empty gt
+        ######################
 
         results = self._parse_anns(results, anns, img.astype(orig_type))
         return results

@@ -233,6 +233,8 @@ class Resize(object):
 
     def _resize_bboxes(self, results):
         """Resize bounding boxes with ``results['scale_factor']``."""
+        if len(results['ann_info']['bboxes'])==0:
+            results['gt_bboxes'] = np.empty([0, 4], dtype=np.float32)  # clw modify: fix bug of empty gt
         for key in results.get('bbox_fields', []):
             bboxes = results[key] * results['scale_factor']
             if self.bbox_clip_border:
@@ -2158,21 +2160,23 @@ class Mixup(object):   # clw note: refer to https://github.com/Wakinguup/Underwa
         # get image2 label
         labels2 = []
         boxes2 = []
-        for annt in self.all_labels['annotations']:  # clw note: can call coco api to get the corresponding ann   TODO
+        for annt in self.all_labels['annotations']:  # clw note: can call coco api to get the corresponding ann
             if annt['image_id'] == img2_id:
                 labels2.append(np.int64(annt['category_id']))
                 boxes2.append([np.float32(annt['bbox'][0] * scale_w),
                                np.float32(annt['bbox'][1] * scale_h),
-                               np.float32((annt['bbox'][0] + annt['bbox'][2] - 1) * scale_w),  # clw note: -1 or not,  TODO
-                               np.float32((annt['bbox'][1] + annt['bbox'][3] - 1) * scale_h)])
-        return img2, labels2, boxes2
+                               np.float32((annt['bbox'][0] + annt['bbox'][2]) * scale_w),
+                               np.float32((annt['bbox'][1] + annt['bbox'][3]) * scale_h)])
+                               # np.float32((annt['bbox'][0] + annt['bbox'][2] - 1) * scale_w),  # clw note: -1 or not,  TODO
+                               # np.float32((annt['bbox'][1] + annt['bbox'][3] - 1) * scale_h)])
+        return img2, labels2, boxes2, img2_fn
 
     def __call__(self, results):
         if random.uniform(0, 1) < self.prob:
             img1 = results['img']
             labels1 = results['gt_labels']
 
-            img2, labels2, boxes2 = self.get_img2(img1)
+            img2, labels2, boxes2, img2_fn = self.get_img2(img1)
             # if labels2 != []:
             #     break
 
@@ -2190,16 +2194,29 @@ class Mixup(object):   # clw note: refer to https://github.com/Wakinguup/Underwa
                 mixup_image = mixup_image.astype('uint8')
             else:
                 # mix image
-                mixup_image = np.zeros([height, width, 3], dtype='float32')
-                mixup_image[:img1.shape[0], :img1.shape[1], :] = img1.astype('float32') * self.lambd
-                mixup_image[:img2.shape[0], :img2.shape[1], :] += img2.astype('float32') * (1. - self.lambd)
-                mixup_image = mixup_image.astype('uint8')
+                mixup_image = img1 * self.lambd + img2 * (1. - self.lambd)
+                #mixup_image = mixup_image.astype('uint8')
 
                 # mix labels
                 results['gt_labels'] = np.hstack((labels1, np.array(labels2)))
                 results['gt_bboxes'] = np.vstack((list(results['gt_bboxes']), boxes2))
 
+                ### 可视化确认结果无误
+                # filename = results['img_info']['file_name']
+                # import cv2
+                # img_out = mixup_image.copy()
+                # for box in results['gt_bboxes']:
+                #     cv2.rectangle(img_out, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), thickness=3,
+                #                   lineType=cv2.LINE_AA)
+                #
+                # cv2.imwrite('/home/user/' + filename, img1)
+                # cv2.imwrite('/home/user/' + img2_fn, img2)
+                # cv2.imwrite('/home/user/' + filename.split('.')[0] + '_' + img2_fn.split('.')[0] + '.jpg', img_out)
+                ###
+
             results['img'] = mixup_image
+
+
 
             # if the image2 has not bboxes, the 'gt_labels' and 'gt_bboxes' need to be doubled
             # so at the end the half of loss weight can be added as 1 instead of 0.5
