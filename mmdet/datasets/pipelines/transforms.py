@@ -233,8 +233,6 @@ class Resize(object):
 
     def _resize_bboxes(self, results):
         """Resize bounding boxes with ``results['scale_factor']``."""
-        if len(results['ann_info']['bboxes'])==0:
-            results['gt_bboxes'] = np.empty([0, 4], dtype=np.float32)  # clw modify: fix bug of empty gt
         for key in results.get('bbox_fields', []):
             bboxes = results[key] * results['scale_factor']
             if self.bbox_clip_border:
@@ -1795,17 +1793,54 @@ class CutOut(object):
             x1 = np.random.randint(0, w)
             y1 = np.random.randint(0, h)
             index = np.random.randint(0, len(self.candidates))
-            if not self.with_ratio:
+            if not self.with_ratio:  # clw note: False
                 cutout_w, cutout_h = self.candidates[index]
             else:
                 cutout_w = int(self.candidates[index][0] * w)
                 cutout_h = int(self.candidates[index][1] * h)
 
+            ##### clw note: 最好先计算所有 results['gt_bboxes'] 和 cutout的iou,比如cutout完全遮挡了小目标,那就应该取消cutout操作;
+            gt_bboxes = results['gt_bboxes']
             x2 = np.clip(x1 + cutout_w, 0, w)
             y2 = np.clip(y1 + cutout_h, 0, h)
-            results['img'][y1:y2, x1:x2, :] = self.fill_in
+            cutout_patch = np.array((x1, y1, x2, y2), dtype=np.float32)
+            cutout_patch = cutout_patch.reshape(1, 4)
+            indexes = self._compute_overlap( cutout_patch, gt_bboxes, over_threshold=0.1 )
+            if indexes.sum() > 0:   # some have overlap > over_threshold
+                continue
+            else:
+                results['img'][y1:y2, x1:x2, :] = self.fill_in
 
         return results
+
+    def _compute_overlap(self, a, b, over_threshold=0.5):  # clw added
+        """
+        Parameters
+        ----------
+        a: (N, 4) ndarray of float
+        b: (K, 4) ndarray of float
+        Returns
+        -------
+        overlaps: (N, K) ndarray of overlap between boxes and query_boxes
+        """
+        area = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
+
+        iw = np.minimum(np.expand_dims(a[:, 2], axis=1), b[:, 2]) - np.maximum(np.expand_dims(a[:, 0], 1), b[:, 0])
+        ih = np.minimum(np.expand_dims(a[:, 3], axis=1), b[:, 3]) - np.maximum(np.expand_dims(a[:, 1], 1), b[:, 1])
+
+        iw = np.maximum(iw, 0)
+        ih = np.maximum(ih, 0)
+
+        # ua = np.expand_dims((a[:, 2] - a[:, 0]) * (a[:, 3] - a[:, 1]), axis=1) + area - iw * ih
+        ua = area
+
+        ua = np.maximum(ua, np.finfo(float).eps)
+
+        intersection = iw * ih
+
+        overlap = intersection / ua
+        index = overlap > over_threshold
+        return index
 
     def __repr__(self):
         repr_str = self.__class__.__name__

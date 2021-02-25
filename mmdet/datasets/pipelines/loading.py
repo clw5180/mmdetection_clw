@@ -245,6 +245,11 @@ class LoadAnnotations(object):
             results['gt_bboxes_ignore'] = gt_bboxes_ignore.copy()
             results['bbox_fields'].append('gt_bboxes_ignore')
         results['bbox_fields'].append('gt_bboxes')
+        ##########
+        #if len(results['ann_info']['bboxes'])==0:  # clw note: fix bug for instaboost
+        if len(results['gt_bboxes'])==0:
+            results['gt_bboxes'] = np.empty([0, 4], dtype=np.float32)  # clw modify: fix bug of empty gt
+        ##########
         return results
 
     def _load_labels(self, results):

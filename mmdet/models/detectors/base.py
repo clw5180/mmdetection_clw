@@ -12,6 +12,9 @@ from mmcv.utils import print_log
 from mmdet.core.visualization import imshow_det_bboxes
 from mmdet.utils import get_root_logger
 
+# clw add
+import random
+import cv2
 
 class BaseDetector(nn.Module, metaclass=ABCMeta):
     """Base class for detectors."""
@@ -338,25 +341,54 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
         # if out_file specified, do not show image in window
         if out_file is not None:
             show = False
+
         # draw bounding boxes
-        imshow_det_bboxes(
-            img,
-            bboxes,
-            labels,
-            segms,
-            class_names=self.CLASSES,
-            score_thr=score_thr,
-            bbox_color=bbox_color,
-            text_color=text_color,
-            mask_color=mask_color,
-            thickness=thickness,
-            font_scale=font_scale,
-            font_size=font_size,
-            win_name=win_name,
-            fig_size=fig_size,
-            show=show,
-            wait_time=wait_time,
-            out_file=out_file)
+        # imshow_det_bboxes(
+        #     img,
+        #     bboxes,
+        #     labels,
+        #     segms,
+        #     class_names=self.CLASSES,
+        #     score_thr=score_thr,
+        #     bbox_color=bbox_color,
+        #     text_color=text_color,
+        #     mask_color=mask_color,
+        #     thickness=thickness,
+        #     font_scale=font_scale,
+        #     font_size=font_size,
+        #     win_name=win_name,
+        #     fig_size=fig_size,
+        #     show=show,
+        #     wait_time=wait_time,
+        #     out_file=out_file)
+        ##################
+        # clw modify
+        CLASSES = ('1', '2', '3', '4', '5', '6', '7', '8')
+        colors = [[random.randint(0, 255) for _ in range(3)] for _ in CLASSES]
+
+        for i in range(len(bboxes)):
+            box = bboxes[i]
+            if box[4] < score_thr:
+                continue
+            cls = labels[i]
+            label = '%s %.2f' % (CLASSES[int(cls)], box[4])
+            plot_one_box(box[:4], img, label=label, color=colors[cls], line_thickness=3)
+        cv2.imwrite(out_file, img)
+        ##################
 
         if not (show or out_file):
             return img
+
+
+def plot_one_box(x, img, color=None, label=None, line_thickness=None):
+    # Plots one bounding box on image img
+    tl = line_thickness or round(0.002 * (img.shape[0] + img.shape[1]) / 2) + 1  # line/font thickness
+    color = color or [random.randint(0, 255) for _ in range(3)]
+    c1, c2 = (int(x[0]), int(x[1])), (int(x[2]), int(x[3]))
+    cv2.rectangle(img, c1, c2, color, thickness=tl, lineType=cv2.LINE_AA)
+    if label:
+        tf = max(tl - 1, 1)  # font thickness
+        t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
+        c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
+        cv2.rectangle(img, c1, c2, color, -1, cv2.LINE_AA)  # filled
+        cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)

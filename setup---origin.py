@@ -156,17 +156,6 @@ if __name__ == '__main__':
             'build': parse_requirements('requirements/build.txt'),
             'optional': parse_requirements('requirements/optional.txt'),
         },
-        ext_modules=[
-	    make_cuda_ext(
-                name="deform_conv_cuda",
-                module="mmdet.models.utils.dcn",
-                sources=["src/deform_conv_cuda.cpp", "src/deform_conv_cuda_kernel.cu"],
-            ),
-            make_cuda_ext(
-                name="deform_pool_cuda",
-                module="mmdet.models.utils.dcn",
-                sources=["src/deform_pool_cuda.cpp", "src/deform_pool_cuda_kernel.cu"],
-            ),
-        ],
+        ext_modules=[],
         cmdclass={'build_ext': BuildExtension},
         zip_safe=False)

@@ -24,7 +24,8 @@ class BaseRoIHead(nn.Module, metaclass=ABCMeta):
 
         if bbox_head is not None:
             self.init_bbox_head(bbox_roi_extractor, bbox_head)
-            self.use_TSD = "TSD" in bbox_head["type"]  # clw modify
+            #self.use_TSD = "TSD" in bbox_head["type"]  # clw modify: cascade is a list of 3 head, not support   TODO
+            self.use_TSD = False
 
         if mask_head is not None:
             self.init_mask_head(mask_roi_extractor, mask_head)
