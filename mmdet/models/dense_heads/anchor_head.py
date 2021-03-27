@@ -10,6 +10,13 @@ from ..builder import HEADS, build_loss
 from .base_dense_head import BaseDenseHead
 from .dense_test_mixins import BBoxTestMixin
 
+def get_num_level_anchors_inside(num_level_anchors, inside_flags):
+    split_inside_flags = torch.split(inside_flags, num_level_anchors)
+    num_level_anchors_inside = [
+        int(flags.sum()) for flags in split_inside_flags
+    ]
+    return num_level_anchors_inside
+
 
 @HEADS.register_module()
 class AnchorHead(BaseDenseHead, BBoxTestMixin):
@@ -175,6 +182,7 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
     def _get_targets_single(self,
                             flat_anchors,
                             valid_flags,
+                            num_level_anchors,
                             gt_bboxes,
                             gt_bboxes_ignore,
                             gt_labels,
@@ -215,15 +223,35 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
                                            img_meta['img_shape'][:2],
                                            self.train_cfg.allowed_border)
         if not inside_flags.any():
-            return (None, ) * 7
+            return (None,) * 7
         # assign gt and sample anchors
         anchors = flat_anchors[inside_flags, :]
 
-        assign_result = self.assigner.assign(
-            anchors, gt_bboxes, gt_bboxes_ignore,
-            None if self.sampling else gt_labels)
-        sampling_result = self.sampler.sample(assign_result, anchors,
-                                              gt_bboxes)
+        #         assign_result = self.assigner.assign(
+        #             anchors, gt_bboxes, gt_bboxes_ignore,
+        #             None if self.sampling else gt_labels)
+        #         sampling_result = self.sampler.sample(assign_result, anchors,
+        #                                               gt_bboxes)
+        num_level_anchors_inside = get_num_level_anchors_inside(num_level_anchors, inside_flags)
+
+        if self.sampling:
+            bbox_assigner = build_assigner(self.train_cfg.assigner)
+            bbox_sampler = build_sampler(self.train_cfg.sampler)
+
+            if self.train_cfg.assigner['type'] == 'ATSSAssigner':
+                assign_result = bbox_assigner.assign(anchors, num_level_anchors_inside, gt_bboxes, gt_bboxes_ignore,
+                                                     gt_labels)
+            else:
+                assign_result = bbox_assigner.assign(anchors, gt_bboxes, gt_bboxes_ignore, gt_labels)
+
+            sampling_result = bbox_sampler.sample(assign_result, anchors, gt_bboxes,
+                                                  gt_labels)
+        else:
+            assign_result = self.assigner.assign(
+                anchors, gt_bboxes, gt_bboxes_ignore,
+                None if self.sampling else gt_labels)
+            sampling_result = self.sampler.sample(assign_result, anchors,
+                                                  gt_bboxes)
 
         num_valid_anchors = anchors.shape[0]
         bbox_targets = torch.zeros_like(anchors)
@@ -341,6 +369,7 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
             self._get_targets_single,
             concat_anchor_list,
             concat_valid_flag_list,
+            num_level_anchors,
             gt_bboxes_list,
             gt_bboxes_ignore_list,
             gt_labels_list,

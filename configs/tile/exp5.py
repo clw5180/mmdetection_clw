@@ -132,7 +132,7 @@ data = dict(
             dict(type='LoadImageFromFile'),
             dict(type='LoadAnnotations', with_bbox=True),
             #dict(type='Concat', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210204/train_template_imgs'),
-            dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
+            #dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
             #dict(type='GtBoxBasedCrop', crop_size=(1536, 1536)),  # clw modify
             #dict(type='Resize', img_scale=(1536, 1536), keep_ratio=True),
             dict(type='Resize', img_scale=(1024, 1024), keep_ratio=True),
@@ -153,7 +153,7 @@ data = dict(
         pipeline=[
             dict(type='LoadImageFromFile'),
             #dict(type='Concat', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210204/train_template_imgs'),
-            dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
+            #dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
             dict(
                 type='MultiScaleFlipAug',
                 #scale_factor=1.0,
@@ -180,7 +180,7 @@ data = dict(
         pipeline=[
             dict(type='LoadImageFromFile'),
             #dict(type='Concat', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210204/train_template_imgs'),
-            dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
+            #dict(type='Concat6', template_path='/home/user/dataset/2021tianchi/tile_round2_train_20210208/train_template_imgs'),
             dict(
                 type='MultiScaleFlipAug',
                 #scale_factor=1.0,

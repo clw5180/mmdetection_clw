@@ -1,6 +1,6 @@
 from .anchor_free_head import AnchorFreeHead
 from .anchor_head import AnchorHead
-from .atss_head import ATSSHead
+from .atss_head import ATSSHead, ATSSSEPCHead
 from .cascade_rpn_head import CascadeRPNHead, StageCascadeRPNHead
 from .centripetal_head import CentripetalHead
 from .corner_head import CornerHead
@@ -27,6 +27,8 @@ from .vfnet_head import VFNetHead
 from .yolact_head import YOLACTHead, YOLACTProtonet, YOLACTSegmHead
 from .yolo_head import YOLOV3Head
 
+from .reppoints_v2_head import RepPointsV2Head  # clw add
+
 __all__ = [
     'AnchorFreeHead', 'AnchorHead', 'GuidedAnchorHead', 'FeatureAdaption',
     'RPNHead', 'GARPNHead', 'RetinaHead', 'RetinaSepBNHead', 'GARetinaHead',
@@ -35,5 +37,7 @@ __all__ = [
     'PISARetinaHead', 'PISASSDHead', 'GFLHead', 'CornerHead', 'YOLACTHead',
     'YOLACTSegmHead', 'YOLACTProtonet', 'YOLOV3Head', 'PAAHead',
     'SABLRetinaHead', 'CentripetalHead', 'VFNetHead', 'TransformerHead',
-    'StageCascadeRPNHead', 'CascadeRPNHead'
-]
+    'StageCascadeRPNHead', 'CascadeRPNHead',
+    'RepPointsV2Head']
+
+__all__ += ['ATSSSEPCHead']

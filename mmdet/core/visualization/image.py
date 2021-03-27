@@ -35,9 +35,11 @@ def imshow_det_bboxes(img,
                       #thickness=2,
                       thickness=0,  # clw modify
                       font_scale=0.5,
-                      font_size=13,
+                      #font_size=13,
+                      font_size=6,
                       win_name='',
-                      fig_size=(15, 10),
+                      #fig_size=(15, 10),
+                      fig_size=(3, 2),
                       show=True,
                       wait_time=0,
                       out_file=None):
@@ -161,8 +163,8 @@ def imshow_det_bboxes(img,
     if out_file is not None:
         dir_name = osp.abspath(osp.dirname(out_file))
         mmcv.mkdir_or_exist(dir_name)
-        #plt.savefig(out_file)
-        plt.savefig(out_file, dpi=600)  # clw modify
+        plt.savefig(out_file)
+        #plt.savefig(out_file, dpi=600)  # clw modify: too slow
         if not show:
             plt.close()
     if show:

@@ -14,6 +14,8 @@ from .deform_pool import (
     ModulatedDeformRoIPoolingPack,
     deform_roi_pooling,
 )
+from .sepc_dconv import ModulatedSEPCConv, SEPCConv
+
 
 __all__ = [
     "DeformConv",
@@ -28,4 +30,9 @@ __all__ = [
     "deform_roi_pooling",
     "DeltaRPooling",
     "DeltaCPooling",
+]
+
+__all__ += [
+    'SEPCConv',
+    'ModulatedSEPCConv'
 ]

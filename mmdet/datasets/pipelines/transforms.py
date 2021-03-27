@@ -1787,23 +1787,74 @@ class CutOut(object):
 
     def __call__(self, results):
         """Call function to drop some regions of image."""
+        results['cutout_overlaps'] = np.zeros(results['gt_bboxes'].shape[0])
         h, w, c = results['img'].shape
         n_holes = np.random.randint(self.n_holes[0], self.n_holes[1] + 1)
         for _ in range(n_holes):
             x1 = np.random.randint(0, w)
             y1 = np.random.randint(0, h)
             index = np.random.randint(0, len(self.candidates))
-            if not self.with_ratio:
+            if not self.with_ratio:  # clw note: False
                 cutout_w, cutout_h = self.candidates[index]
             else:
                 cutout_w = int(self.candidates[index][0] * w)
                 cutout_h = int(self.candidates[index][1] * h)
 
+            ##### clw note: 最好先计算所有 results['gt_bboxes'] 和 cutout的iou,比如cutout完全遮挡了小目标,那就应该取消cutout操作;
+            gt_bboxes = results['gt_bboxes']
             x2 = np.clip(x1 + cutout_w, 0, w)
             y2 = np.clip(y1 + cutout_h, 0, h)
-            results['img'][y1:y2, x1:x2, :] = self.fill_in
+            cutout_patch = np.array((x1, y1, x2, y2), dtype=np.float32)
+            cutout_patch = cutout_patch.reshape(1, 4)
+            overlaps = self._compute_overlap( cutout_patch, gt_bboxes )  # 比如某些小目标被完全覆盖了,iou就等于1,这时要完全跳过
+            if overlaps.sum() == 0:
+                continue
+
+            overlaps = overlaps[0]  # 2 dim arrary -> 1 dim
+            for i, overlap in enumerate(overlaps):
+                if overlap == 0:  # cutout在背景区域
+                    continue
+                elif overlap > 0 and (gt_bboxes[i][3] - gt_bboxes[i][1]) * (gt_bboxes[i][2] - gt_bboxes[i][0]) < cutout_w * cutout_h : # 不让cutout到小目标,碰一点都不行
+                    continue
+                elif overlap < 0.5:
+                    if results['cutout_overlaps'][i] + overlap > 0.5:
+                        continue
+                    else:
+                        results['cutout_overlaps'][i] += overlap
+                        results['img'][y1:y2, x1:x2, :] = self.fill_in
+                else:
+                    continue
 
         return results
+
+    def _compute_overlap(self, a, b):  # clw added
+        """
+        Parameters
+        ----------
+        a: (N, 4) ndarray of float
+        b: (K, 4) ndarray of float
+        Returns
+        -------
+        overlaps: (N, K) ndarray of overlap between boxes and query_boxes
+        """
+        area = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
+
+        iw = np.minimum(np.expand_dims(a[:, 2], axis=1), b[:, 2]) - np.maximum(np.expand_dims(a[:, 0], 1), b[:, 0])
+        ih = np.minimum(np.expand_dims(a[:, 3], axis=1), b[:, 3]) - np.maximum(np.expand_dims(a[:, 1], 1), b[:, 1])
+
+        iw = np.maximum(iw, 0)
+        ih = np.maximum(ih, 0)
+
+        # ua = np.expand_dims((a[:, 2] - a[:, 0]) * (a[:, 3] - a[:, 1]), axis=1) + area - iw * ih
+        ua = area
+
+        ua = np.maximum(ua, np.finfo(float).eps)
+
+        intersection = iw * ih
+
+        overlaps = intersection / ua
+        #index = overlap > over_threshold
+        return overlaps
 
     def __repr__(self):
         repr_str = self.__class__.__name__
@@ -2116,3 +2167,327 @@ class BboxesJitter(object):
         repr_str = self.__class__.__name__
         repr_str += "(shift_ratio={})".format(self.shift_ratio)
         return repr_str
+
+
+import os
+import json
+@PIPELINES.register_module()
+class Mixup(object):   # clw note: refer to https://github.com/Wakinguup/Underwater_detection/blob/c3d971046cb7d8f6ec8213e9d9fc29c5f28f8412/code/mmdet/datasets/pipelines/transforms.py
+    """Mixup images & bbox
+    Args:
+        prob (float): the probability of carrying out mixup process.
+        lambd (float): the parameter for mixup.
+        json_path (string): the path to dataset json file.
+    """
+
+    def __init__(self, prob=0.5,
+                 json_path='data/coco/annotations/pgtrainval2017.json',
+                 img_path='data/coco/images/'):
+        #self.lambd = np.random.beta(1.5, 1.5)  # clw note: the paper use this value, but the loss need to be weighted !!!
+        self.lambd = 0.5
+        self.prob = prob
+        self.json_path = json_path
+        self.img_path = img_path
+        with open(json_path, 'r') as json_file:
+            all_labels = json.load(json_file)
+        self.all_labels = all_labels
+
+    def get_img2(self, img1):
+        # random get image2 for mixup
+        idx2 = np.random.choice(np.arange(len(self.all_labels['images'])))  # clw note: except img1, TODO
+        img2_fn = self.all_labels['images'][idx2]['file_name']
+        img2_id = self.all_labels['images'][idx2]['id']
+        img2_path = os.path.join(self.img_path , img2_fn)
+        img2 = cv2.imread(img2_path)
+
+        ### clw modify: resize img2 and boxes2, as img1, so the size is same;
+        scale_w = img1.shape[1] / img2.shape[1]
+        scale_h = img1.shape[0] / img2.shape[0]
+        img2 = cv2.resize(img2, (img1.shape[1], img1.shape[0]))
+        ######################
+
+        # get image2 label
+        labels2 = []
+        boxes2 = []
+        for annt in self.all_labels['annotations']:  # clw note: can call coco api to get the corresponding ann
+            if annt['image_id'] == img2_id:
+                labels2.append(np.int64(annt['category_id']))
+                boxes2.append([np.float32(annt['bbox'][0] * scale_w),
+                               np.float32(annt['bbox'][1] * scale_h),
+                               np.float32((annt['bbox'][0] + annt['bbox'][2]) * scale_w),
+                               np.float32((annt['bbox'][1] + annt['bbox'][3]) * scale_h)])
+                               # np.float32((annt['bbox'][0] + annt['bbox'][2] - 1) * scale_w),  # clw note: -1 or not,  TODO
+                               # np.float32((annt['bbox'][1] + annt['bbox'][3] - 1) * scale_h)])
+        return img2, labels2, boxes2, img2_fn
+
+    def __call__(self, results):
+        if random.uniform(0, 1) < self.prob:
+            img1 = results['img']
+            labels1 = results['gt_labels']
+
+            img2, labels2, boxes2, img2_fn = self.get_img2(img1)
+            # if labels2 != []:
+            #     break
+
+
+            ############################################
+            assert img1.shape[0] == img2.shape[0]
+            assert img1.shape[1] == img2.shape[1]
+
+            height = img1.shape[0]
+            width = img1.shape[1]
+
+            if labels2 == []:  # clw note: if sample 2 is pure negative sample
+                self.lambd = 0.9  # float(round(random.uniform(0.5,0.9),1))
+                # mix image
+                # mixup_image = np.zeros([height, width, 3], dtype='float32')
+                # mixup_image[:img1.shape[0], :img1.shape[1], :] = img1.astype('float32') * self.lambd
+                # mixup_image[:img2.shape[0], :img2.shape[1], :] += img2.astype('float32') * (1. - self.lambd)
+                # mixup_image = mixup_image.astype('uint8')
+                mixup_image = img1 * self.lambd + img2 * (1. - self.lambd)
+            else:
+                self.lambd = 0.5
+                # mix image
+                mixup_image = img1 * self.lambd + img2 * (1. - self.lambd)
+                #mixup_image = mixup_image.astype('uint8')
+
+                # mix labels
+                results['gt_labels'] = np.hstack((labels1, np.array(labels2)))
+                results['gt_bboxes'] = np.vstack((list(results['gt_bboxes']), boxes2))
+
+                ### 可视化确认结果无误
+                filename = results['img_info']['file_name']
+                import cv2
+                img_out = mixup_image.copy()
+                for box in results['gt_bboxes']:
+                    cv2.rectangle(img_out, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), thickness=3,
+                                  lineType=cv2.LINE_AA)
+
+                cv2.imwrite('/home/user/' + filename, img1)
+                cv2.imwrite('/home/user/' + img2_fn, img2)
+                cv2.imwrite('/home/user/' + filename.split('.')[0] + '_' + img2_fn.split('.')[0] + '.jpg', img_out)
+                ###
+
+            results['img'] = mixup_image
+
+
+
+            # if the image2 has not bboxes, the 'gt_labels' and 'gt_bboxes' need to be doubled
+            # so at the end the half of loss weight can be added as 1 instead of 0.5
+            # if boxes2 == []:
+            #     results['gt_labels'] = np.hstack((labels1, labels1))
+            #     results['gt_bboxes'] = np.vstack((list(results['gt_bboxes']), list(results['gt_bboxes'])))
+            # else:
+
+            return results
+
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(prob={}, lambd={}, mixup={}, json_path={}, img_path={})'.format(self.prob,
+                                                                                                           self.lambd,
+                                                                                                           self.mixup,
+                                                                                                           self.json_path,
+                                                                                                           self.img_path)
+
+
+
+@PIPELINES.register_module
+class ReplaceBackground(object):
+    '''
+    为更好抑制假阳，在训练时引⼊阴性样本数据，具体实现为：训练时，以⼀定的概率丢弃当前随机抽取的阳性Roi，
+    从阴性样本数据中随机抽取⼀张阴性Roi作为背景，把当前的阳性样本中的gt_box贴到阴性背景中作为训练样本，
+    ⽤cv2.inpaint对贴合的gt_box边缘进⾏修复。
+    '''
+    def __init__(self, prob=0.2,
+                 json_path='data/coco/annotations/pgtrainval2017.json',
+                 img_path='data/coco/images/'):
+
+        self.prob = prob
+        self.json_path = json_path
+        self.img_path = img_path
+        with open(json_path, 'r') as json_file:
+            all_labels = json.load(json_file)
+        self.all_labels = all_labels
+
+    def get_img2(self, img1):
+        # random get image2 for mixup
+        idx2 = np.random.choice(np.arange(len(self.all_labels['images'])))  # clw note: except img1, TODO
+        img2_fn = self.all_labels['images'][idx2]['file_name']
+        img2_id = self.all_labels['images'][idx2]['id']
+        img2_path = os.path.join(self.img_path , img2_fn)
+        img2 = cv2.imread(img2_path)
+
+        ### clw modify: resize img2 and boxes2, as img1, so the size is same;
+        scale_w = img1.shape[1] / img2.shape[1]
+        scale_h = img1.shape[0] / img2.shape[0]
+        img2 = cv2.resize(img2, (img1.shape[1], img1.shape[0]))
+        ######################
+        return img2, img2_fn
+
+
+    def __call__(self, results):
+        if random.uniform(0, 1) < self.prob:
+            src_img = results['img']
+            # labels1 = results['gt_labels']
+
+            bg_img, bg_img_fn = self.get_img2(src_img)
+
+            ############################################
+            assert src_img.shape[0] == bg_img.shape[0]
+            assert src_img.shape[1] == bg_img.shape[1]
+
+            # mask = np.zeros((bg_img.shape[0], bg_img.shape[1], 1), np.uint8)              # mask = cv2.cvtColor(bg_img, cv2.COLOR_RGB2GRAY)
+
+            tmp_gt_bboxes = []
+            tmp_gt_labels = []
+            for i in range(len(results['gt_bboxes'])):
+                x1 = int(results['gt_bboxes'][i][0])
+                y1 = int(results['gt_bboxes'][i][1])
+                x2 = int(results['gt_bboxes'][i][2])
+                y2 = int(results['gt_bboxes'][i][3])
+                # 太小的不适合做泊松融合, 会报bug,
+                if x2-x1 <= 3 or y2-y1 <= 3:
+                    continue
+                else:
+                    tmp_gt_bboxes.append( results['gt_bboxes'][i] )
+                    tmp_gt_labels.append( results['gt_labels'][i] )
+
+                # clw note: 改为泊松融合
+                # if (x2 - x1) % 2 == 0:
+                #     x2+=1
+                # if (y2-y1)%2==0:
+                #     y2+=1
+                obj = src_img[y1:y2, x1:x2, :]
+
+                #mask = 255 * np.ones(obj.shape, obj.dtype)
+                mask = 255 * np.ones(obj.shape, obj.dtype)
+                #mask = np.zeros(obj.shape[:2], obj.dtype)
+                h, w = mask.shape[:2]
+                # rect of thickness > 1
+                #cv2.rectangle(mask, (0, 0), (w, h), 255, 1)  # the clone will now aligns from the centre, thick=1 is not work
+
+                # for i in range(obj.shape[0]):
+                #     mask[0][i] = 255
+
+                # mask = np.zeros_like(obj)  # clw note: mask = np.zeros(obj.shape[:2]) can cause error   cv2.error: OpenCV(4.5.1) /tmp/pip-req-build-7m_g9lbm/opencv/modules/core/src/matrix_wrap.cpp:1613: error: (-215:Assertion failed) !fixedSize() in function 'release'
+                # bound = -3
+                # mask[:, bound:] = 255
+
+                center = ( (x2+x1)//2, (y2+y1)//2)
+                #print(x1, x2, y1, y2, center, obj.shape, mask.shape, bg_img.shape)
+                bg_img = cv2.seamlessClone(obj, bg_img, mask, center, cv2.MIXED_CLONE)  # cv2.NORMAL_CLONE   cv2.MIXED_CLONE
+
+                # bg_img[y1:y2, x1:x2 , :] = src_img[y1:y2, x1:x2, :]
+                # mask = cv2.rectangle(mask,(x1,y1), (x2, y2), 255, 6)
+
+            # image = cv2.inpaint(bg_img, mask, inpaintRadius=3, flags=cv2.INPAINT_NS)
+            # results['img'] = image
+
+            if len(tmp_gt_bboxes) == 0:
+                return results   # 不做融合了,直接返回
+            results['gt_bboxes'] = np.array(tmp_gt_bboxes)
+            results['gt_labels'] = np.array(tmp_gt_labels)
+            #print(tmp_gt_bboxes, tmp_gt_labels)
+            results['img'] = bg_img
+
+            ### 可视化确认结果无误
+            # filename = results['img_info']['file_name']
+            # img_out = results['img'].copy()
+            # for box in results['gt_bboxes']:
+            #     cv2.rectangle(img_out, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), thickness=0, lineType=cv2.LINE_AA)
+            #
+            # cv2.imwrite('/home/user/' + filename, src_img)
+            # cv2.imwrite('/home/user/' + bg_img_fn, bg_img)
+            # cv2.imwrite('/home/user/' + filename.split('.')[0] + '_' + bg_img_fn.split('.')[0] + '.jpg', img_out)
+            ###
+
+        return results
+
+
+# import scipy
+# from scipy.sparse.linalg import spsolve
+# def laplacian_matrix(n, m):
+#     """Generate the Poisson matrix.
+#
+#     Refer to:
+#     https://en.wikipedia.org/wiki/Discrete_Poisson_equation
+#
+#     Note: it's the transpose of the wiki's matrix
+#     """
+#     mat_D = scipy.sparse.lil_matrix((m, m))
+#     mat_D.setdiag(-1, -1)
+#     mat_D.setdiag(4)
+#     mat_D.setdiag(-1, 1)
+#
+#     mat_A = scipy.sparse.block_diag([mat_D] * n).tolil()
+#
+#     mat_A.setdiag(-1, 1 * m)
+#     mat_A.setdiag(-1, -1 * m)
+#
+#     return mat_A
+#
+# def poisson_edit(source, target, mask, offset):
+#     """The poisson blending function.
+#
+#     Refer to:
+#     Perez et. al., "Poisson Image Editing", 2003.
+#     """
+#
+#     # Assume:
+#     # target is not smaller than source.
+#     # shape of mask is same as shape of target.
+#     y_max, x_max = target.shape[:-1]
+#     y_min, x_min = 0, 0
+#
+#     x_range = x_max - x_min
+#     y_range = y_max - y_min
+#
+#     M = np.float32([[1, 0, offset[0]], [0, 1, offset[1]]])
+#     source = cv2.warpAffine(source, M, (x_range, y_range))
+#
+#     mask = mask[y_min:y_max, x_min:x_max]
+#     mask[mask != 0] = 1
+#
+#     mat_A = laplacian_matrix(y_range, x_range)
+#
+#     # for \Delta g
+#     laplacian = mat_A.tocsc()
+#
+#     # set the region outside the mask to identity
+#     for y in range(1, y_range - 1):
+#         for x in range(1, x_range - 1):
+#             if mask[y, x] == 0:
+#                 k = x + y * x_range
+#                 mat_A[k, k] = 1
+#                 mat_A[k, k + 1] = 0
+#                 mat_A[k, k - 1] = 0
+#                 mat_A[k, k + x_range] = 0
+#                 mat_A[k, k - x_range] = 0
+#
+#     mat_A = mat_A.tocsc()
+#
+#     mask_flat = mask.flatten()
+#     for channel in range(source.shape[2]):
+#         source_flat = source[y_min:y_max, x_min:x_max, channel].flatten()
+#         target_flat = target[y_min:y_max, x_min:x_max, channel].flatten()
+#
+#         # inside the mask:
+#         # \Delta f = div v = \Delta g
+#         alpha = 1
+#         mat_b = laplacian.dot(source_flat) * alpha
+#
+#         # outside the mask:
+#         # f = t
+#         mat_b[mask_flat == 0] = target_flat[mask_flat == 0]
+#
+#         x = spsolve(mat_A, mat_b)
+#         # print(x.shape)
+#         x = x.reshape((y_range, x_range))
+#         # print(x.shape)
+#         x[x > 255] = 255
+#         x[x < 0] = 0
+#         x = x.astype('uint8')
+#
+#         target[y_min:y_max, x_min:x_max, channel] = x
+#
+#     return target

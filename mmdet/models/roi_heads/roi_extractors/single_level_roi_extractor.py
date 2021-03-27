@@ -24,10 +24,15 @@ class SingleRoIExtractor(BaseRoIExtractor):
                  roi_layer,
                  out_channels,
                  featmap_strides,
+                 add_context=False,  # clw added
                  finest_scale=56):
         super(SingleRoIExtractor, self).__init__(roi_layer, out_channels,
                                                  featmap_strides)
         self.finest_scale = finest_scale
+
+        self.add_context = add_context  # clw add
+        self.pool = torch.nn.AdaptiveAvgPool2d(7)  # clw add
+
 
     def map_roi_levels(self, rois, num_levels):
         """Map rois to corresponding feature levels by scales.
@@ -69,10 +74,22 @@ class SingleRoIExtractor(BaseRoIExtractor):
         if torch.__version__ == 'parrots':
             roi_feats.requires_grad = True
 
+
         if num_levels == 1:
             if len(rois) == 0:
                 return roi_feats
             return self.roi_layers[0](feats[0], rois)
+
+        ####
+        if self.add_context:# clw add
+            context = []
+            for feat in feats:
+                context.append(self.pool(feat))
+                #context.append(F.interpolate(feat, size=out_size, mode='bilinear', align_corners=True))
+
+        num_levels = len(feats)
+        batch_size = feats[0].shape[0]  # clw add
+        ####
 
         target_lvls = self.map_roi_levels(rois, num_levels)
         if roi_scale_factor is not None:
@@ -91,6 +108,11 @@ class SingleRoIExtractor(BaseRoIExtractor):
             if inds.numel() > 0:
                 rois_ = rois[inds]
                 roi_feats_t = self.roi_layers[i](feats[i], rois_)
+                ####
+                if self.add_context:  # clw added
+                    for j in range(batch_size):
+                        roi_feats_t[rois_[:, 0] == j] += context[i][j]
+                ####
                 roi_feats[inds] = roi_feats_t
             else:
                 roi_feats += sum(

@@ -135,8 +135,16 @@ class DualCascadeRCNN(TwoStageDetector):
                 x = self.extract_feat(img)
                 x_ = []
 
+                # 方法1: 直接用 瑕疵图和模板图融合 的结果作为feature
+                # for i, lvl_feat in enumerate(x):
+                #     x_.append(self.scale_a(lvl_feat[0::2, :, :, :]) + self.scale_b(lvl_feat[1::2, :, :, :])) #
+
+                # 方法2:将瑕疵图和模板图融合 的结果再经过sigmoid, 作为attention权重乘以原feature
                 for i, lvl_feat in enumerate(x):
-                    x_.append(self.scale_a(lvl_feat[0::2, :, :, :]) + self.scale_b(lvl_feat[1::2, :, :, :])) #瑕疵图和模板图融合
+                    #attention_weights = torch.sigmoid(self.scale_a(lvl_feat[0::2, :, :, :]) + self.scale_b(lvl_feat[1::2, :, :, :]))
+                    attention_weights = torch.sigmoid((lvl_feat[0::2, :, :, :]) - lvl_feat[1::2, :, :, :])  # worse than mutiply scale
+                    x_.append( lvl_feat[0::2, :, :, :] * attention_weights )   #
+
                 x = tuple(x_)
             elif self.style == 'add_feat':
                 x = self.extract_feat(img)

@@ -636,6 +636,24 @@ class ResNet(nn.Module):
                 outs.append(x)
         return tuple(outs)  # clw note: outs:[(8, 256, h/4, w/4), (8, 256, h/8, w/8), (), ()]
 
+    # def forward(self, x):
+    #     """Forward function."""
+    #     if self.deep_stem:
+    #         x = self.stem(x)
+    #     else:
+    #         x = self.conv1(x)
+    #         x = self.norm1(x)
+    #         stage1 = self.relu(x)
+    #     x = self.maxpool(stage1)
+    #     outs = []
+    #     outs.append(stage1)  # clw modify
+    #     for i, layer_name in enumerate(self.res_layers):
+    #         res_layer = getattr(self, layer_name)
+    #         x = res_layer(x)
+    #         if i in self.out_indices:
+    #             outs.append(x)
+    #     return tuple(outs)
+
     def train(self, mode=True):
         """Convert the model into training mode while keep normalization layer
         freezed."""

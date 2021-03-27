@@ -155,3 +155,37 @@ class FocalLoss(nn.Module):
         else:
             raise NotImplementedError
         return loss_cls
+
+@LOSSES.register_module()
+class SEPFocalLoss(nn.Module):
+
+    def __init__(self,
+                 gamma=2.0,
+                 alpha=0.25,
+                 reduction='mean',
+                 loss_weight=1.0):
+        super(SEPFocalLoss, self).__init__()
+        self.gamma = gamma
+        self.alpha = alpha
+        self.reduction = reduction
+        self.loss_weight = loss_weight
+
+    def forward(self,
+                pred,
+                target,
+                weight=None,
+                avg_factor=None,
+                reduction_override=None):
+        assert reduction_override in (None, 'none', 'mean', 'sum')
+        reduction = (
+            reduction_override if reduction_override else self.reduction)
+        loss_cls = self.loss_weight * separate_sigmoid_focal_loss(
+            pred,
+            target,
+            weight,
+            gamma=self.gamma,
+            alpha=self.alpha,
+            reduction=reduction,
+            avg_factor=avg_factor)
+
+        return loss_cls
