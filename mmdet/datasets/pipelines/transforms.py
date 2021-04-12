@@ -2231,7 +2231,6 @@ class Mixup(object):   # clw note: refer to https://github.com/Wakinguup/Underwa
 
 
             ############################################
-<<<<<<< HEAD
             assert img1.shape[0] == img2.shape[0]
             assert img1.shape[1] == img2.shape[1]
 
@@ -2248,19 +2247,6 @@ class Mixup(object):   # clw note: refer to https://github.com/Wakinguup/Underwa
                 mixup_image = img1 * self.lambd + img2 * (1. - self.lambd)
             else:
                 self.lambd = 0.5
-=======
-            height = max(img1.shape[0], img2.shape[0])
-            width = max(img1.shape[1], img2.shape[1])
-
-            if labels2 == []:  # clw note: sample 2 is pure negative sample
-                self.lambd = 0.9  # float(round(random.uniform(0.5,0.9),1))
-                # mix image
-                mixup_image = np.zeros([height, width, 3], dtype='float32')
-                mixup_image[:img1.shape[0], :img1.shape[1], :] = img1.astype('float32') * self.lambd
-                mixup_image[:img2.shape[0], :img2.shape[1], :] += img2.astype('float32') * (1. - self.lambd)
-                mixup_image = mixup_image.astype('uint8')
-            else:
->>>>>>> cbe74c6f361096df1b822c93f6e4bb5243e6e356
                 # mix image
                 mixup_image = img1 * self.lambd + img2 * (1. - self.lambd)
                 #mixup_image = mixup_image.astype('uint8')
@@ -2270,7 +2256,6 @@ class Mixup(object):   # clw note: refer to https://github.com/Wakinguup/Underwa
                 results['gt_bboxes'] = np.vstack((list(results['gt_bboxes']), boxes2))
 
                 ### 可视化确认结果无误
-<<<<<<< HEAD
                 filename = results['img_info']['file_name']
                 import cv2
                 img_out = mixup_image.copy()
@@ -2281,18 +2266,6 @@ class Mixup(object):   # clw note: refer to https://github.com/Wakinguup/Underwa
                 cv2.imwrite('/home/user/' + filename, img1)
                 cv2.imwrite('/home/user/' + img2_fn, img2)
                 cv2.imwrite('/home/user/' + filename.split('.')[0] + '_' + img2_fn.split('.')[0] + '.jpg', img_out)
-=======
-                # filename = results['img_info']['file_name']
-                # import cv2
-                # img_out = mixup_image.copy()
-                # for box in results['gt_bboxes']:
-                #     cv2.rectangle(img_out, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), thickness=3,
-                #                   lineType=cv2.LINE_AA)
-                #
-                # cv2.imwrite('/home/user/' + filename, img1)
-                # cv2.imwrite('/home/user/' + img2_fn, img2)
-                # cv2.imwrite('/home/user/' + filename.split('.')[0] + '_' + img2_fn.split('.')[0] + '.jpg', img_out)
->>>>>>> cbe74c6f361096df1b822c93f6e4bb5243e6e356
                 ###
 
             results['img'] = mixup_image
@@ -2314,7 +2287,6 @@ class Mixup(object):   # clw note: refer to https://github.com/Wakinguup/Underwa
                                                                                                            self.lambd,
                                                                                                            self.mixup,
                                                                                                            self.json_path,
-<<<<<<< HEAD
                                                                                                            self.img_path)
 
 
@@ -2519,6 +2491,3 @@ class ReplaceBackground(object):
 #         target[y_min:y_max, x_min:x_max, channel] = x
 #
 #     return target
-=======
-                                                                                                           self.img_path)
->>>>>>> cbe74c6f361096df1b822c93f6e4bb5243e6e356
