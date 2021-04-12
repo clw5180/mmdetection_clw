@@ -389,19 +389,19 @@ class TileDataset(CustomDataset):
         result_files, tmp_dir = self.format_results(results, jsonfile_prefix)
 
         eval_results = OrderedDict()
-        cocoGt = self.coco
+        cocoGt = self.coco  # anns: {dict:13},  imgs: {dict:19}
         for metric in metrics:
             if metric == 'mAP':
-                annotations = [self.get_ann_info(i) for i in range(len(self))]
+                annotations = [self.get_ann_info(i) for i in range(len(self))]  # list:19 contains anns of each img
                 eval_results = OrderedDict()
-                iou_thrs_map =[iou_thr_map] if isinstance(iou_thr_map, float) else iou_thr_map
+                iou_thrs_map =[iou_thr_map] if isinstance(iou_thr_map, float) else iou_thr_map # [0.1, 0.3, 0.5]
 				
                 assert isinstance(iou_thrs_map, list)
                 mean_aps = []
                 for iou_thr in iou_thrs_map:
                     print_log(f'\n{"-" * 15}iou_thr: {iou_thr}{"-" * 15}')
                     mean_ap, _ = eval_map(
-                        results,
+                        results,  # list:19 每个元素是 list:8, 因为这里是8个类别, 每个元素是(0, 5), 分别代表x1y1x2y2和score;
                         annotations,
                         scale_ranges=scale_ranges,
                         iou_thr=iou_thr,
